@@ -733,8 +733,108 @@ class OmneyBusinessAutomation:
             # Wait for upload to complete
             self.page.wait_for_timeout(2000)
 
-            # Step 3: Log all fetched data
-            print("\n[STEP 3] Invoice Data Logged:")
+            # Step 3: Capture ALL data from the form
+            print("\n[STEP 3] Capturing all invoice data from form...")
+
+            # Capture all field values from the page
+            captured_data = self.page.evaluate("""
+                () => {
+                    const data = {};
+
+                    // Invoice Details
+                    const invoiceNumInput = document.querySelector('input[placeholder*="Invoice Number"], input[name*="invoice"]');
+                    if (invoiceNumInput) data['Invoice Number'] = invoiceNumInput.value;
+
+                    const dateInputs = document.querySelectorAll('input[type="date"]');
+                    if (dateInputs[0]) data['Invoice Date'] = dateInputs[0].value;
+                    if (dateInputs[1]) data['Due Date'] = dateInputs[1].value;
+
+                    // Get all text content that looks like field values
+                    const pageText = document.body.innerText;
+
+                    // Company Name - look for text between "Company Name" and "Email" labels
+                    const companyNameMatch = pageText.match(/Company Name\\s*\\n\\s*([A-Za-z][A-Za-z0-9\\s&.,'-]+?)\\s*(?:\\n|Email)/);
+                    if (companyNameMatch) {
+                        let compName = companyNameMatch[1].trim();
+                        // Remove trailing label words if present
+                        compName = compName.replace(/\\s*(Email|Mobile|Phone).*$/i, '').trim();
+                        if (compName && compName.length > 1) data['Company Name'] = compName;
+                    }
+
+                    // Email - look for actual email format
+                    const emailMatch = pageText.match(/Email\\s*\\n\\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})/);
+                    if (emailMatch) data['Email'] = emailMatch[1].trim();
+
+                    // Mobile Number - look for phone number pattern
+                    const mobileMatch = pageText.match(/Mobile Number\\s*\\n\\s*([+]?[\\d\\s()-]{8,20})/);
+                    if (mobileMatch) {
+                        const mobile = mobileMatch[1].trim();
+                        if (mobile && mobile.length >= 8) data['Mobile Number'] = mobile;
+                    }
+
+                    // Receiving Account section
+                    const bankNameMatch = pageText.match(/Bank Name\\s*\\n\\s*([A-Za-z][A-Za-z\\s]+?)\\s*(?:\\n|Account Holder)/);
+                    if (bankNameMatch) data['Bank Name'] = bankNameMatch[1].trim();
+
+                    const holderMatch = pageText.match(/Account Holder Name\\s*\\n\\s*([A-Za-z][A-Za-z\\s.]+?)\\s*(?:\\n|Account Number)/);
+                    if (holderMatch) data['Account Holder Name'] = holderMatch[1].trim();
+
+                    const accNumMatch = pageText.match(/Account Number\\s*\\n\\s*([*\\d]+)/);
+                    if (accNumMatch) data['Account Number'] = accNumMatch[1].trim();
+
+                    const accCurrMatch = pageText.match(/Account Currency\\s*\\n\\s*([A-Z]{3})/);
+                    if (accCurrMatch) data['Account Currency'] = accCurrMatch[1].trim();
+
+                    const routingMatch = pageText.match(/Routing Number\\s*\\n\\s*([*\\dN\\/A]+)/i);
+                    if (routingMatch) data['Routing Number'] = routingMatch[1].trim();
+
+                    const branchMatch = pageText.match(/Branch Code\\s*\\n\\s*([A-Za-z0-9\\/]+)/i);
+                    if (branchMatch) data['Branch Code'] = branchMatch[1].trim();
+
+                    const nicknameMatch = pageText.match(/Nickname\\s*\\n\\s*([\\d]+)/);
+                    if (nicknameMatch) data['Nickname'] = nicknameMatch[1].trim();
+
+                    const addedOnMatch = pageText.match(/Account Added On\\s*\\n\\s*([\\d\\/]+)/);
+                    if (addedOnMatch) data['Account Added On'] = addedOnMatch[1].trim();
+
+                    // Purpose and Amount
+                    const amountInput = document.querySelector('input[placeholder*="amount"], input[placeholder*="Amount"]');
+                    if (amountInput) data['Amount'] = amountInput.value;
+
+                    // Description
+                    const descInput = document.querySelector('textarea[placeholder*="description"], textarea[placeholder*="Description"]');
+                    if (descInput && descInput.value) data['Description'] = descInput.value;
+
+                    return data;
+                }
+            """)
+
+            # Update invoice_data with captured values
+            self.invoice_data = {
+                "Invoice Number": invoice_number,
+                "Invoice Date": invoice_date,
+                "Due Date": due_date,
+                "Client": client_name,
+                "Company Name": captured_data.get('Company Name', client_name),
+                "Email": captured_data.get('Email', 'N/A'),
+                "Mobile Number": captured_data.get('Mobile Number', 'N/A'),
+                "Receiving Account": bank_account,
+                "Bank Name": captured_data.get('Bank Name', 'N/A'),
+                "Account Holder Name": captured_data.get('Account Holder Name', 'N/A'),
+                "Account Number": captured_data.get('Account Number', 'N/A'),
+                "Account Currency": captured_data.get('Account Currency', 'N/A'),
+                "Routing Number": captured_data.get('Routing Number', 'N/A'),
+                "Branch Code": captured_data.get('Branch Code', 'N/A'),
+                "Nickname": captured_data.get('Nickname', 'N/A'),
+                "Account Added On": captured_data.get('Account Added On', 'N/A'),
+                "Purpose": purpose,
+                "Currency": currency,
+                "Amount": amount,
+                "Description": captured_data.get('Description', ''),
+                "Invoice Document": document_path
+            }
+
+            print("[STEP 3] Invoice Data Captured:")
             for key, value in self.invoice_data.items():
                 print(f"  {key}: {value}")
 
