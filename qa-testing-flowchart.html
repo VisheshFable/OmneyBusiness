@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA Testing Process Flowchart</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #1a202c;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #718096;
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+        }
+
+        .flowchart {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+        }
+
+        /* Node Styles */
+        .node {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1;
+        }
+
+        .start-end {
+            background: #2d3748;
+            border-radius: 50px;
+            padding: 20px 50px;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 2px solid #4a5568;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .start-end:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .process {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 25px 40px;
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid #cbd5e0;
+            text-align: center;
+            min-width: 200px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .process:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .process ul {
+            list-style: none;
+            margin-top: 10px;
+            font-weight: 400;
+            font-size: 0.9rem;
+        }
+
+        .process ul li {
+            padding: 3px 0;
+            color: #4a5568;
+        }
+
+        .process ul li::before {
+            content: "• ";
+            color: #718096;
+        }
+
+        .decision {
+            background: #edf2f7;
+            width: 220px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            border: 2px solid #a0aec0;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            padding: 15px;
+        }
+
+        .decision:hover {
+            transform: scale(1.03);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .automation {
+            background: #e2e8f0;
+            border-radius: 10px;
+            padding: 25px 35px;
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid #a0aec0;
+            text-align: center;
+            min-width: 200px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .automation:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .automation ul {
+            list-style: none;
+            margin-top: 10px;
+            font-weight: 400;
+            font-size: 0.85rem;
+        }
+
+        .automation ul li {
+            padding: 3px 0;
+            color: #4a5568;
+        }
+
+        .automation ul li::before {
+            content: "• ";
+            color: #718096;
+        }
+
+        .manual {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 25px 35px;
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid #cbd5e0;
+            text-align: center;
+            min-width: 200px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .manual:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .manual ul {
+            list-style: none;
+            margin-top: 10px;
+            font-weight: 400;
+            font-size: 0.85rem;
+        }
+
+        .manual ul li {
+            padding: 3px 0;
+            color: #4a5568;
+        }
+
+        .manual ul li::before {
+            content: "• ";
+            color: #718096;
+        }
+
+        .defect {
+            background: #edf2f7;
+            border-radius: 10px;
+            padding: 20px 35px;
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid #a0aec0;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .defect:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Arrow Styles */
+        .arrow {
+            width: 3px;
+            height: 40px;
+            background: #718096;
+            position: relative;
+        }
+
+        .arrow::after {
+            content: "";
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 12px solid #718096;
+        }
+
+        .arrow-short {
+            height: 25px;
+        }
+
+        /* Branch Container */
+        .branch-container {
+            display: flex;
+            gap: 100px;
+            position: relative;
+            margin-top: 20px;
+        }
+
+        .branch {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+        }
+
+        .branch-label {
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.1rem;
+            padding: 8px 20px;
+            border-radius: 20px;
+            margin-bottom: 10px;
+        }
+
+        .yes-label {
+            background: #4a5568;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .no-label {
+            background: #718096;
+            color: #fff;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Horizontal Connector Lines */
+        .branch-connector {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 100px);
+            height: 3px;
+            background: #a0aec0;
+            border-radius: 2px;
+        }
+
+        .branch-connector::before {
+            content: "";
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 40px;
+            background: #a0aec0;
+        }
+
+        /* Merge Connector */
+        .merge-section {
+            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .merge-connector {
+            position: absolute;
+            top: -30px;
+            width: calc(100% - 200px);
+            max-width: 600px;
+            height: 3px;
+            background: #a0aec0;
+            border-radius: 2px;
+        }
+
+        .merge-connector::after {
+            content: "";
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 40px;
+            background: #718096;
+        }
+
+        .merge-connector::before {
+            content: "";
+            position: absolute;
+            bottom: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 12px solid #718096;
+        }
+
+        /* Legend */
+        .legend {
+            margin-top: 60px;
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .legend h3 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #4a5568;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 5px;
+            border: 1px solid #cbd5e0;
+        }
+
+        .legend-start { background: #2d3748; }
+        .legend-process { background: #f7fafc; }
+        .legend-decision { background: #edf2f7; }
+        .legend-automation { background: #e2e8f0; }
+        .legend-manual { background: #f7fafc; }
+        .legend-defect { background: #edf2f7; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .branch-container {
+                flex-direction: column;
+                gap: 40px;
+            }
+
+            .branch-connector {
+                display: none;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+
+        /* Animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .node {
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .node:nth-child(1) { animation-delay: 0.1s; }
+        .node:nth-child(2) { animation-delay: 0.2s; }
+        .node:nth-child(3) { animation-delay: 0.3s; }
+        .node:nth-child(4) { animation-delay: 0.4s; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QA Testing Process Flowchart</h1>
+        <p class="subtitle">A comprehensive view of the Quality Assurance testing workflow</p>
+
+        <div class="flowchart">
+            <!-- Start -->
+            <div class="node">
+                <div class="start-end">Requirement Analysis</div>
+            </div>
+
+            <div class="arrow"></div>
+
+            <!-- Test Planning -->
+            <div class="node">
+                <div class="process">Test Planning</div>
+            </div>
+
+            <div class="arrow"></div>
+
+            <!-- Test Design -->
+            <div class="node">
+                <div class="process">
+                    Test Design
+                    <ul>
+                        <li>Test Scenarios</li>
+                        <li>Test Cases</li>
+                        <li>Test Data</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="arrow"></div>
+
+            <!-- Decision Node -->
+            <div class="node">
+                <div class="decision">
+                    Automation<br>Feasibility<br>Assessment
+                </div>
+            </div>
+
+            <!-- Branch Container -->
+            <div class="branch-container">
+                <div class="branch-connector"></div>
+
+                <!-- Automation Branch (Yes) -->
+                <div class="branch">
+                    <div class="branch-label yes-label">Yes</div>
+
+                    <div class="node">
+                        <div class="automation">Select Test Cases for Automation</div>
+                    </div>
+
+                    <div class="arrow"></div>
+
+                    <div class="node">
+                        <div class="automation">
+                            Automation Scripting
+                            <ul>
+                                <li>Framework Setup</li>
+                                <li>Script Development</li>
+                                <li>CI/CD Integration</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="arrow"></div>
+
+                    <div class="node">
+                        <div class="automation">
+                            Automation Execution
+                            <ul>
+                                <li>Regression Testing</li>
+                                <li>Smoke Testing</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="arrow"></div>
+
+                    <div class="node">
+                        <div class="automation">Automation Test Report & Defect Logging</div>
+                    </div>
+
+                    <div class="arrow"></div>
+
+                    <div class="node">
+                        <div class="automation">Defect Re-test & Automation Maintenance</div>
+                    </div>
+                </div>
+
+                <!-- Manual Branch (No) -->
+                <div class="branch">
+                    <div class="branch-label no-label">No</div>
+
+                    <div class="node">
+                        <div class="manual">
+                            Manual Test Execution
+                            <ul>
+                                <li>Functional Testing</li>
+                                <li>UI/UX Testing</li>
+                                <li>Integration Testing</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="arrow"></div>
+
+                    <div class="node">
+                        <div class="defect">Defect Logging</div>
+                    </div>
+
+                    <div class="arrow"></div>
+
+                    <div class="node">
+                        <div class="defect">Fix Verification</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Merge Section -->
+            <div class="merge-section">
+                <div class="merge-connector"></div>
+            </div>
+
+            <!-- QA Sign Off -->
+            <div class="node" style="margin-top: 80px;">
+                <div class="start-end">QA Sign Off</div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <h3>Legend</h3>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-color legend-start"></div>
+                    <span>Start / End</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-process"></div>
+                    <span>Process Step</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-decision"></div>
+                    <span>Decision Point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-automation"></div>
+                    <span>Automation Path</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-manual"></div>
+                    <span>Manual Testing Path</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-defect"></div>
+                    <span>Defect Management</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

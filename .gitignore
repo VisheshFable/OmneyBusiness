@@ -1,0 +1,23 @@
+# Claude Code
+.claude/
+
+# MCP config
+.mcp.json
+
+# Temporary/system files
+nul
+*.tmp
+~$*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Reports and screenshots (large binary files)
+Reports/
+Screenshots/
+
+# Excel temp files
+~$*.xlsx
