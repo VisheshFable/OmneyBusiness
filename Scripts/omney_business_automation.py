@@ -64,13 +64,19 @@ class OmneyBusinessAutomation:
     def setup(self):
         """Setup browser and page."""
         self.playwright = sync_playwright().start()
+
+        # Launch browser in fullscreen/maximized mode
         self.browser = self.playwright.chromium.launch(
             headless=self.headless,
-            slow_mo=500  # Slow down actions for visibility
+            slow_mo=500,  # Slow down actions for visibility
+            args=[
+                "--start-maximized",
+                "--disable-infobars",
+                "--no-first-run"
+            ]
         )
-        self.context = self.browser.new_context(
-            viewport={"width": 1920, "height": 1080}
-        )
+        # Use no_viewport=True to allow the browser to use its full window size
+        self.context = self.browser.new_context(no_viewport=True)
         self.page = self.context.new_page()
 
         # Load test data from Excel
