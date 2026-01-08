@@ -1,7 +1,13 @@
 """
 Omney Business Automation Script
 ================================
-Automates test cases TC_01, TC_02, TC_03 for Omney Business application.
+Automates test cases TC_01, TC_02, TC_03, TC_04 for Omney Business application.
+
+Test Cases:
+    TC_01: URL Verification - Check if URL is working
+    TC_02: Login - Check if user can login with valid credentials
+    TC_03: Raise Invoice - Create an invoice and capture Request ID
+    TC_04: Verify Pending Receivables - Find invoice and verify data
 
 Requirements:
     pip install playwright pandas openpyxl
@@ -48,6 +54,8 @@ class OmneyBusinessAutomation:
         self.test_results = []
         self.request_id = None
         self.invoice_data = {}
+        self.tc04_verification_results = []  # TC_04 verification data
+        self.tc04_captured_data = {}  # TC_04 captured invoice details
 
         # Setup directories
         self.base_dir = Path(__file__).parent.parent
@@ -959,6 +967,246 @@ class OmneyBusinessAutomation:
             return False
 
     # =========================================================================
+    # TEST CASE: TC_04 - Verify Pending Receivables
+    # =========================================================================
+    def tc_04_verify_pending_receivables(self) -> bool:
+        """
+        TC_04: To check if user can find Request ID in Pending Receivables and verify data
+
+        Steps:
+            1. Find the invoice in Pending Receivables section using Request ID/Invoice Number
+            2. Click on the Eye icon to view invoice details
+            3. Capture all invoice data from the details page
+            4. Verify captured data against expected data from TC_03
+
+        Expected: All invoice data should match the data entered during TC_03
+        """
+        tc_id = "TC_04"
+        scenario = "To check if user can find Request ID in Pending Receivables and verify data"
+        print(f"\n{'='*60}")
+        print(f"[EXECUTING] {tc_id}: {scenario}")
+        print(f"{'='*60}")
+
+        try:
+            # Ensure we have data from TC_03
+            if not self.request_id or not self.invoice_data:
+                raise Exception("TC_04 requires TC_03 to be executed first (Request ID and Invoice data needed)")
+
+            invoice_number = self.invoice_data.get("Invoice Number", "")
+            print(f"[INFO] Looking for Invoice: {invoice_number}")
+            print(f"[INFO] Request ID: {self.request_id}")
+
+            # Step 1: Find invoice in Pending Receivables
+            print("\n[STEP 1] Finding invoice in Pending Receivables...")
+
+            # Wait for dashboard to fully load
+            self.page.wait_for_load_state("networkidle")
+            self.page.wait_for_timeout(2000)
+
+            # Scroll to Pending Receivables section
+            self.page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            self.page.wait_for_timeout(1000)
+
+            # Look for the invoice
+            invoice_row = self.page.locator(f"tr:has-text('{invoice_number}')")
+            if not invoice_row.is_visible(timeout=10000):
+                raise Exception(f"Invoice not found in Pending Receivables: {invoice_number}")
+
+            print(f"[STEP 1] Found invoice: {invoice_number}")
+            screenshot_receivables = self._take_screenshot("TC_04_Pending_Receivables")
+
+            # Step 2: Click on Eye icon to view details
+            print("\n[STEP 2] Clicking eye icon to view invoice details...")
+
+            # Try to click the eye icon using JavaScript
+            clicked = self.page.evaluate(f"""
+                () => {{
+                    const rows = document.querySelectorAll('tr');
+                    for (const row of rows) {{
+                        if (row.textContent.includes('{invoice_number}')) {{
+                            const cells = row.querySelectorAll('td');
+                            const lastCell = cells[cells.length - 1];
+                            if (lastCell) {{
+                                const eyeIcon = lastCell.querySelector('svg');
+                                if (eyeIcon) {{
+                                    eyeIcon.dispatchEvent(new MouseEvent('click', {{
+                                        view: window,
+                                        bubbles: true,
+                                        cancelable: true
+                                    }}));
+                                    return true;
+                                }}
+                            }}
+                            break;
+                        }}
+                    }}
+                    return false;
+                }}
+            """)
+
+            if not clicked:
+                # Fallback: try clicking via Playwright
+                eye_icon = invoice_row.locator("svg.lucide-eye, svg[class*='eye']").first
+                if eye_icon.is_visible(timeout=3000):
+                    eye_icon.click()
+
+            # Wait for navigation to details page
+            self.page.wait_for_url("**/receivable-details", timeout=15000)
+            self.page.wait_for_load_state("networkidle")
+            print("[STEP 2] Navigated to invoice details page")
+
+            self.page.wait_for_timeout(2000)
+            screenshot_details = self._take_screenshot("TC_04_Invoice_Details")
+
+            # Step 3: Capture invoice details from the page
+            print("\n[STEP 3] Capturing invoice details from page...")
+
+            captured_data = self.page.evaluate("""
+                () => {
+                    const data = {};
+                    const pageText = document.body.innerText;
+
+                    // Invoice Number
+                    const invNumMatch = pageText.match(/Invoice Number:\\s*\\n?\\s*([A-Z0-9-]+)/i);
+                    if (invNumMatch) data['Invoice Number'] = invNumMatch[1].trim();
+
+                    // Date
+                    const dateMatch = pageText.match(/Date:\\s*\\n?\\s*([A-Za-z]+ \\d{1,2}, \\d{4})/i);
+                    if (dateMatch) data['Date'] = dateMatch[1].trim();
+
+                    // Bill From
+                    const billFromMatch = pageText.match(/Bill From:\\s*\\n?\\s*([A-Za-z\\s]+?)\\s*\\n?\\s*,\\s*([A-Za-z]+)/i);
+                    if (billFromMatch) {
+                        data['Bill From Name'] = billFromMatch[1].trim();
+                        data['Bill From Country'] = billFromMatch[2].trim();
+                    }
+
+                    // Bank Name
+                    const bankMatch = pageText.match(/Bank Name:\\s*\\n?\\s*([A-Za-z\\s]+?)\\s*(?:\\n|Account)/i);
+                    if (bankMatch) data['Bank Name'] = bankMatch[1].trim();
+
+                    // Account Number
+                    const accMatch = pageText.match(/Account Number:\\s*\\n?\\s*([*\\d]+)/i);
+                    if (accMatch) data['Account Number'] = accMatch[1].trim();
+
+                    // Currency
+                    const currMatch = pageText.match(/Currency:\\s*\\n?\\s*([A-Z]{3})?/i);
+                    data['Currency'] = currMatch && currMatch[1] ? currMatch[1].trim() : '';
+
+                    // Country (in bank details section)
+                    const countryMatch = pageText.match(/Country:\\s*\\n?\\s*([A-Za-z\\s]+?)\\s*(?:\\n|Attached)/i);
+                    if (countryMatch) data['Country'] = countryMatch[1].trim();
+
+                    // Amount
+                    const amountMatch = pageText.match(/Amount Due\\s*\\n?\\s*([\\d,.]+)/i);
+                    if (amountMatch) data['Amount'] = amountMatch[1].trim();
+
+                    // Alternative amount capture
+                    if (!data['Amount']) {
+                        const altAmountMatch = pageText.match(/Payment Request\\s*\\n?\\s*([\\d,.]+)/i);
+                        if (altAmountMatch) data['Amount'] = altAmountMatch[1].trim();
+                    }
+
+                    // Attached Documents
+                    const docMatch = pageText.match(/Attached Documents \\((\\d+)\\)/);
+                    if (docMatch) data['Documents Count'] = docMatch[1];
+
+                    return data;
+                }
+            """)
+
+            self.tc04_captured_data = captured_data
+            print("[STEP 3] Captured Invoice Details:")
+            for key, value in captured_data.items():
+                print(f"  {key}: {value}")
+
+            # Step 4: Verify data against TC_03 expected values
+            print("\n[STEP 4] Verifying invoice data...")
+
+            # Build expected data from TC_03 invoice data
+            expected_data = {
+                "Invoice Number": self.invoice_data.get("Invoice Number", ""),
+                "Bank Name": self.invoice_data.get("Bank Name", "").upper(),
+                "Account Number": self.invoice_data.get("Account Number", ""),
+                "Currency": self.invoice_data.get("Currency", "INR"),
+                "Country": "India",  # Expected country based on INR currency
+                "Amount": self.invoice_data.get("Amount", "")
+            }
+
+            verification_results = []
+            for field, expected_value in expected_data.items():
+                actual_value = captured_data.get(field, '')
+
+                # Normalize values for comparison
+                expected_normalized = str(expected_value).strip().upper() if expected_value else ''
+                actual_normalized = str(actual_value).strip().upper() if actual_value else ''
+
+                # Handle amount comparison (remove commas, compare numbers)
+                if field == "Amount":
+                    try:
+                        expected_num = float(str(expected_value).replace(",", ""))
+                        actual_num = float(str(actual_value).replace(",", ""))
+                        if abs(expected_num - actual_num) < 0.01:
+                            status = "MATCH"
+                        else:
+                            status = "MISMATCH"
+                    except:
+                        status = "MISMATCH" if expected_normalized != actual_normalized else "MATCH"
+                elif actual_normalized == expected_normalized:
+                    status = "MATCH"
+                elif not actual_value or actual_value == '':
+                    status = "DATA MISSING"
+                else:
+                    status = "MISMATCH"
+
+                result = {
+                    "field": field,
+                    "expected": expected_value,
+                    "actual": actual_value if actual_value else "(Blank)",
+                    "status": status
+                }
+                verification_results.append(result)
+
+                status_icon = "✓" if status == "MATCH" else "✗"
+                print(f"  {status_icon} {field}: Expected='{expected_value}' | Actual='{actual_value}' | {status}")
+
+            self.tc04_verification_results = verification_results
+
+            # Determine overall result
+            failed_count = sum(1 for r in verification_results if r['status'] != 'MATCH')
+            overall_status = "PASSED" if failed_count == 0 else "FAILED"
+
+            print(f"\n[RESULT] Fields Verified: {len(verification_results)}")
+            print(f"[RESULT] Fields Matched: {len(verification_results) - failed_count}")
+            print(f"[RESULT] Fields Mismatched/Missing: {failed_count}")
+
+            # Navigate back to dashboard
+            self.page.go_back()
+            self.page.wait_for_timeout(2000)
+
+            # Log result
+            if overall_status == "PASSED":
+                self._log_result(
+                    tc_id, scenario, "PASSED",
+                    f"Invoice verified successfully. All {len(verification_results)} fields matched.",
+                    f"{screenshot_receivables}, {screenshot_details}"
+                )
+                return True
+            else:
+                mismatched_fields = [r['field'] for r in verification_results if r['status'] != 'MATCH']
+                self._log_result(
+                    tc_id, scenario, "FAILED",
+                    f"Data verification failed. Mismatched fields: {', '.join(mismatched_fields)}",
+                    f"{screenshot_receivables}, {screenshot_details}"
+                )
+                return False
+
+        except Exception as e:
+            screenshot = self._take_screenshot("TC_04_FAILED")
+            self._log_result(tc_id, scenario, "FAILED", str(e), screenshot)
+            return False
+
+    # =========================================================================
     # Report Generation
     # =========================================================================
     def generate_report(self):
@@ -1018,11 +1266,61 @@ class OmneyBusinessAutomation:
                 invoice_rows += f"<tr><td>{key}</td><td>{value}</td></tr>"
             invoice_rows += f"<tr><td>request_id</td><td><strong>{self.request_id}</strong></td></tr>"
             invoice_html = f'''
-            <h2 class="section-title">Invoice Data Captured</h2>
+            <h2 class="section-title">Invoice Data Captured (TC_03)</h2>
             <table class="data-table">
                 <tr><th>Field</th><th>Value</th></tr>
                 {invoice_rows}
             </table>'''
+
+        # Generate TC_04 verification results HTML if available
+        tc04_html = ""
+        if self.tc04_verification_results:
+            verification_rows = ""
+            for r in self.tc04_verification_results:
+                if r['status'] == 'MATCH':
+                    status_color = "green"
+                elif r['status'] == 'DATA MISSING':
+                    status_color = "orange"
+                else:
+                    status_color = "red"
+                verification_rows += f'''
+                    <tr>
+                        <td>{r['field']}</td>
+                        <td>{r['expected']}</td>
+                        <td>{r['actual']}</td>
+                        <td style="color: {status_color}; font-weight: bold;">{r['status']}</td>
+                    </tr>'''
+
+            # Observations for mismatched fields
+            observations = []
+            for r in self.tc04_verification_results:
+                if r['status'] == 'DATA MISSING':
+                    observations.append(f"<li><strong>{r['field']}:</strong> Field appears blank in the Invoice Details view page.</li>")
+                elif r['status'] == 'MISMATCH':
+                    observations.append(f"<li><strong>{r['field']}:</strong> Shows \"{r['actual']}\" instead of expected \"{r['expected']}\".</li>")
+
+            observations_html = ""
+            if observations:
+                observations_html = f'''
+                <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                    <strong>Observations:</strong>
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        {''.join(observations)}
+                    </ul>
+                </div>'''
+
+            tc04_html = f'''
+            <h2 class="section-title">TC_04 Data Verification Results</h2>
+            <table class="data-table">
+                <tr>
+                    <th>Field</th>
+                    <th>Expected (TC_03)</th>
+                    <th>Actual (Details Page)</th>
+                    <th>Status</th>
+                </tr>
+                {verification_rows}
+            </table>
+            {observations_html}'''
 
         report_content = f'''<!DOCTYPE html>
 <html lang="en">
@@ -1129,6 +1427,8 @@ class OmneyBusinessAutomation:
 
             {invoice_html}
 
+            {tc04_html}
+
             <h2 class="section-title" style="margin-top: 40px;">Environment Details</h2>
             <table class="data-table">
                 <tr><th>Parameter</th><th>Value</th></tr>
@@ -1196,10 +1496,15 @@ class OmneyBusinessAutomation:
 
                 if tc02_result:
                     tc03_result = self.tc_03_raise_invoice()
+
+                    if tc03_result:
+                        tc04_result = self.tc_04_verify_pending_receivables()
+                    else:
+                        print("[SKIP] TC_04 skipped due to TC_03 failure")
                 else:
-                    print("[SKIP] TC_03 skipped due to TC_02 failure")
+                    print("[SKIP] TC_03, TC_04 skipped due to TC_02 failure")
             else:
-                print("[SKIP] TC_02, TC_03 skipped due to TC_01 failure")
+                print("[SKIP] TC_02, TC_03, TC_04 skipped due to TC_01 failure")
 
             # Generate report
             self.generate_report()
