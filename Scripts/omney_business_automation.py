@@ -1,7 +1,7 @@
 """
 Omney Business Automation Script
 ================================
-Automates test cases TC_01 to TC_06 for Omney Business application.
+Automates test cases TC_01 to TC_07 for Omney Business application.
 
 Test Cases:
     TC_01: URL Verification - Check if URL is working
@@ -9,7 +9,8 @@ Test Cases:
     TC_03: Raise Invoice - Create an invoice and capture Request ID
     TC_04: Verify Pending Receivables - Find invoice and verify data (as Vendor)
     TC_05: Verify Pending Payables - Login as Client_Business and verify invoice data
-    TC_06: Pay Invoice - Approve and pay invoice, capture transaction success details
+    TC_06: Pay Invoice from View Page - Click eye icon, view invoice, approve and pay
+    TC_07: Pay Invoice from Homepage - Click Approve directly from Homepage table and pay
 
 Requirements:
     pip install playwright pandas openpyxl
@@ -65,6 +66,9 @@ class OmneyBusinessAutomation:
         self.tc06_verification_results = []  # TC_06 verification data
         self.tc06_form_data = {}  # TC_06 captured Pay Invoice form data
         self.tc06_transaction_data = {}  # TC_06 transaction success data
+        self.tc07_verification_results = []  # TC_07 verification data
+        self.tc07_form_data = {}  # TC_07 captured Pay Invoice form data
+        self.tc07_transaction_data = {}  # TC_07 transaction success data
 
         # Setup directories
         self.base_dir = Path(__file__).parent.parent
@@ -1952,23 +1956,45 @@ class OmneyBusinessAutomation:
 
             screenshot_success = self._take_screenshot("TC_06_Transaction_Success")
 
-            # Capture transaction details
+            # Capture transaction details with improved regex patterns
             transaction_data = self.page.evaluate("""
                 () => {
                     const data = {};
                     const pageText = document.body.innerText;
 
+                    // Booking ID - format: OB followed by digits
                     const bookingMatch = pageText.match(/Booking ID[\\s\\n]+([A-Z0-9]+)/);
                     if (bookingMatch) data['Booking ID'] = bookingMatch[1];
 
-                    const bankMatch = pageText.match(/Send Money To[\\s\\S]*?([A-Za-z\\s]+of[A-Za-z\\s]+)/i);
-                    if (bankMatch) data['Bank'] = bankMatch[1].trim();
+                    // Bank Name - First try to find common bank names (more reliable)
+                    const bankFallback = pageText.match(/(Bank of America|Chase Bank|Wells Fargo|Citibank|HSBC|JP Morgan|Goldman Sachs)/i);
+                    if (bankFallback) {
+                        data['Bank Name'] = bankFallback[1];
+                    } else {
+                        // Fallback: look for "Bank Name" label followed by value
+                        const bankMatch = pageText.match(/Bank Name[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\n)/i);
+                        if (bankMatch && !bankMatch[1].toLowerCase().includes('account')) {
+                            data['Bank Name'] = bankMatch[1].trim();
+                        }
+                    }
 
-                    const accMatch = pageText.match(/([\\d]{10,})/);
+                    // Account Holder - look for "Account Holder" label
+                    const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
+                    if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
+
+                    // Account Number - look for "Account Number" label followed by digits (exclude invoice-like patterns)
+                    const accMatch = pageText.match(/Account Number[\\s\\n]+(\\d{8,12})(?!\\d)/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
-                    const bicMatch = pageText.match(/([A-Z]{8,11})/);
-                    if (bicMatch) data['BIC Code'] = bicMatch[1];
+                    // BIC Code - look for "BIC Code" label followed by SWIFT format
+                    const bicMatch = pageText.match(/BIC Code[\\s\\n]+([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{0,3})/i);
+                    if (bicMatch) {
+                        data['BIC Code'] = bicMatch[1];
+                    } else {
+                        // Fallback: look for SWIFT code pattern (e.g., BOFAUS3NXXX)
+                        const bicFallback = pageText.match(/\\b([A-Z]{4}US[A-Z0-9]{2}[A-Z0-9]{0,3})\\b/);
+                        if (bicFallback) data['BIC Code'] = bicFallback[1];
+                    }
 
                     return data;
                 }
@@ -1977,8 +2003,9 @@ class OmneyBusinessAutomation:
             self.tc06_transaction_data = transaction_data
             print("[SUCCESS] Transaction completed!")
             print(f"  Booking ID: {transaction_data.get('Booking ID', 'N/A')}")
-            print(f"  Bank: {transaction_data.get('Bank', 'N/A')}")
-            print(f"  Account: {transaction_data.get('Account Number', 'N/A')}")
+            print(f"  Bank Name: {transaction_data.get('Bank Name', 'N/A')}")
+            print(f"  Account Holder: {transaction_data.get('Account Holder', 'N/A')}")
+            print(f"  Account Number: {transaction_data.get('Account Number', 'N/A')}")
             print(f"  BIC Code: {transaction_data.get('BIC Code', 'N/A')}")
 
             # Step 9: Close popup
@@ -2001,6 +2028,432 @@ class OmneyBusinessAutomation:
 
         except Exception as e:
             screenshot = self._take_screenshot("TC_06_FAILED")
+            self._log_result(tc_id, scenario, "FAILED", str(e), screenshot)
+            return False
+
+    def tc_07_pay_invoice_homepage(self) -> bool:
+        """
+        TC_07: To Pay Invoice from Homepage
+
+        KEY DIFFERENCE from TC_06: Clicks Approve button directly from Homepage
+        Pending Payables table (instead of navigating to view page first).
+
+        Steps:
+            1. Continue from previous tests (already logged in as Client_Business)
+            2. Find invoice in Pending Payables on Homepage
+            3. Click Approve button directly from Homepage table (NOT view page)
+            4. Click Pay Now to navigate to Pay Invoice form
+            5. Capture and verify all form fields against TC_03 data
+            6. Click Pay Now to complete payment
+            7. Capture Transaction Success popup with Booking ID
+            8. Close popup and verify dashboard
+
+        Expected: Transaction success popup should be displayed with Booking ID
+        """
+        tc_id = "TC_07"
+        scenario = "To Pay Invoice from Homepage (Direct Approve from Pending Payables)"
+        print(f"\n{'='*60}")
+        print(f"[EXECUTING] {tc_id}: {scenario}")
+        print(f"{'='*60}")
+
+        try:
+            # Ensure we have data from TC_03
+            if not self.invoice_data:
+                raise Exception("TC_07 requires TC_03 to be executed first (Invoice data needed)")
+
+            invoice_number = self.invoice_data.get("Invoice Number", "")
+            print(f"[INFO] Processing Invoice: {invoice_number}")
+            print("[INFO] KEY: Will approve directly from Homepage (not view page)")
+
+            # Step 1: Navigate to dashboard
+            print("\n[STEP 1] Navigating to dashboard...")
+
+            if "/dashboard" not in self.page.url:
+                self.page.goto(f"{self.base_url}/dashboard")
+                self.page.wait_for_load_state("networkidle")
+
+            self.page.wait_for_timeout(2000)
+
+            # If on login page, login as Client_Business
+            if "/login" in self.page.url:
+                print("[INFO] Logging in as Client_Business...")
+                client_email, client_password = self._get_credentials("Client_Business")
+
+                email_input = self.page.locator("input[type='email'], input[type='text']").first
+                email_input.fill(client_email)
+
+                password_input = self.page.locator("input[type='password']").first
+                password_input.fill(client_password)
+                password_input.press("Enter")
+
+                self.page.wait_for_url("**/dashboard", timeout=30000)
+                self.page.wait_for_load_state("networkidle")
+
+            screenshot_dashboard = self._take_screenshot("TC_07_Client_Dashboard")
+
+            # Step 2: Find invoice in Pending Payables on Homepage
+            print("\n[STEP 2] Finding invoice in Pending Payables on Homepage...")
+
+            self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            self.page.wait_for_timeout(2000)
+
+            # Look for invoice
+            invoice_visible = False
+            try:
+                invoice_element = self.page.locator(f"text={invoice_number}").first
+                if invoice_element.is_visible(timeout=10000):
+                    invoice_visible = True
+            except:
+                pass
+
+            if not invoice_visible:
+                view_all_buttons = self.page.locator("button:has-text('View all')")
+                if view_all_buttons.count() > 1:
+                    view_all_buttons.nth(1).click()
+                    self.page.wait_for_timeout(2000)
+
+            screenshot_payables = self._take_screenshot("TC_07_Pending_Payables_Homepage")
+
+            # Step 3: Click Approve button directly from Homepage (KEY DIFFERENCE from TC_06)
+            print("\n[STEP 3] Clicking Approve button directly from Homepage...")
+            print("[KEY DIFFERENCE] TC_06 clicks eye icon first, TC_07 clicks Approve directly")
+
+            approve_clicked = self.page.evaluate(f"""
+                () => {{
+                    // Find the row containing the invoice number
+                    const tables = document.querySelectorAll('table');
+                    for (const table of tables) {{
+                        const rows = table.querySelectorAll('tr');
+                        for (const row of rows) {{
+                            if (row.textContent.includes('{invoice_number}')) {{
+                                // Find Approve button in this row
+                                const allButtons = row.querySelectorAll('button');
+                                for (const btn of allButtons) {{
+                                    if (btn.textContent.toLowerCase().includes('approve')) {{
+                                        btn.click();
+                                        return true;
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+
+                    // Fallback: Look in div elements
+                    const elements = document.querySelectorAll('tr, div[class*="row"], div[class*="card"]');
+                    for (const el of elements) {{
+                        if (el.textContent.includes('{invoice_number}')) {{
+                            const buttons = el.querySelectorAll('button');
+                            for (const btn of buttons) {{
+                                if (btn.textContent.toLowerCase().includes('approve')) {{
+                                    btn.click();
+                                    return true;
+                                }}
+                            }}
+                        }}
+                    }}
+                    return false;
+                }}
+            """)
+
+            if not approve_clicked:
+                # Playwright fallback
+                try:
+                    invoice_row = self.page.locator(f"tr:has-text('{invoice_number}')")
+                    approve_btn = invoice_row.locator("button:has-text('Approve')")
+                    if approve_btn.is_visible(timeout=5000):
+                        approve_btn.click()
+                        approve_clicked = True
+                except:
+                    pass
+
+            if not approve_clicked:
+                raise Exception(f"Could not find Approve button for invoice {invoice_number} on Homepage")
+
+            self.page.wait_for_timeout(3000)
+            screenshot_approve = self._take_screenshot("TC_07_After_Approve_Homepage")
+
+            # Wait for Pay Now button
+            pay_now_btn = self.page.locator("button:has-text('Pay Now')").first
+            if not pay_now_btn.is_visible(timeout=10000):
+                raise Exception("Pay Now button not found after approval from Homepage")
+
+            print("[STEP 3] Invoice approved from Homepage, Pay Now button visible")
+
+            # Step 4: Click Pay Now to navigate to Pay Invoice form
+            print("\n[STEP 4] Clicking Pay Now to navigate to Pay Invoice form...")
+
+            pay_now_btn.click()
+            self.page.wait_for_timeout(3000)
+
+            self.page.wait_for_url("**/pay**", timeout=15000)
+            self.page.wait_for_load_state("networkidle")
+            self.page.wait_for_timeout(2000)
+
+            screenshot_form = self._take_screenshot("TC_07_Pay_Invoice_Form", full_page=True)
+            print("[STEP 4] Navigated to Pay Invoice form")
+
+            # Step 5: Capture and verify form data
+            print("\n[STEP 5] Capturing Pay Invoice form data...")
+
+            captured_data = self.page.evaluate("""
+                () => {
+                    const data = {};
+                    const pageText = document.body.innerText;
+
+                    const allInputs = document.querySelectorAll('input');
+                    const allSelects = document.querySelectorAll('select');
+
+                    // Bank Name
+                    for (const input of allInputs) {
+                        const val = input.value;
+                        if (val && val.toUpperCase().includes('BANK')) {
+                            data['Bank Name'] = val;
+                            break;
+                        }
+                    }
+
+                    // Account Number
+                    for (const input of allInputs) {
+                        const val = input.value;
+                        if (val && val.match(/^\\*+\\d+$/)) {
+                            data['Account Number'] = val;
+                            break;
+                        }
+                    }
+
+                    // Invoice Number
+                    for (const input of allInputs) {
+                        if (input.value && input.value.startsWith('INV-')) {
+                            data['Invoice Number'] = input.value;
+                            break;
+                        }
+                    }
+
+                    // Dates
+                    const dateInputs = document.querySelectorAll('input[type="date"]');
+                    if (dateInputs[0]) data['Invoice Date'] = dateInputs[0].value;
+                    if (dateInputs[1]) data['Due Date'] = dateInputs[1].value;
+
+                    // Currency
+                    for (const sel of allSelects) {
+                        const selectedOpt = sel.options[sel.selectedIndex];
+                        if (selectedOpt) {
+                            const txt = selectedOpt.text || selectedOpt.value;
+                            if (txt && txt.match(/^[A-Z]{3}$/)) {
+                                data['Currency'] = txt;
+                                break;
+                            }
+                        }
+                    }
+                    if (!data['Currency']) {
+                        const currencyMatch = pageText.match(/Currency \\*[\\s\\n]+([A-Z]{3})/);
+                        if (currencyMatch) data['Currency'] = currencyMatch[1];
+                    }
+
+                    // Amount - look for input with amount-related attributes first
+                    for (const input of allInputs) {
+                        const placeholder = (input.placeholder || '').toLowerCase();
+                        const name = (input.name || '').toLowerCase();
+                        const id = (input.id || '').toLowerCase();
+                        // Check if this is specifically an amount field
+                        if (placeholder.includes('amount') || name.includes('amount') || id.includes('amount')) {
+                            if (input.value && input.value.match(/^[\\d.]+$/)) {
+                                data['Amount'] = input.value;
+                                break;
+                            }
+                        }
+                    }
+                    // Fallback: look for numeric value that's a reasonable amount (not phone numbers)
+                    if (!data['Amount']) {
+                        for (const input of allInputs) {
+                            const val = input.value;
+                            // Amount should be numeric, between 100 and 10 million, and not look like a phone number
+                            if (val && val.match(/^[\\d.]+$/) && !val.match(/^\\d{10,}$/)) {
+                                const numVal = parseFloat(val);
+                                if (numVal >= 100 && numVal <= 10000000) {
+                                    data['Amount'] = val;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Purpose
+                    for (const sel of allSelects) {
+                        const selectedOpt = sel.options[sel.selectedIndex];
+                        if (selectedOpt) {
+                            const txt = selectedOpt.text || selectedOpt.value;
+                            if (txt && (txt.toLowerCase().includes('purpose') ||
+                                       txt.toLowerCase().includes('demo') ||
+                                       txt.toLowerCase().includes('payment'))) {
+                                data['Purpose'] = txt;
+                                break;
+                            }
+                        }
+                    }
+                    if (!data['Purpose']) {
+                        const purposeMatch = pageText.match(/(Demo Purpose|Payment Purpose|Business Purpose|Trade Purpose)/i);
+                        if (purposeMatch) data['Purpose'] = purposeMatch[1];
+                    }
+
+                    // Invoice Document
+                    const docMatch = pageText.match(/([A-Za-z0-9._-]+\\.(png|pdf|jpg|jpeg))/i);
+                    if (docMatch) data['Invoice Document'] = docMatch[0];
+
+                    return data;
+                }
+            """)
+
+            self.tc07_form_data = captured_data
+            print("[DATA] Captured Pay Invoice Form Data:")
+            for key, value in captured_data.items():
+                print(f"  {key}: {value}")
+
+            # Verify against TC_03 data
+            print("\n[VERIFY] Comparing with TC_03 data...")
+            verification_results = []
+
+            fields_to_verify = [
+                ('Invoice Number', 'Invoice Number'),
+                ('Bank Name', 'Bank Name'),
+                ('Account Number', 'Account Number'),
+                ('Currency', 'Currency'),
+                ('Amount', 'Amount'),
+                ('Purpose', 'Purpose'),
+            ]
+
+            for tc03_field, tc07_field in fields_to_verify:
+                expected = str(self.invoice_data.get(tc03_field, '')).strip().upper()
+                actual = str(captured_data.get(tc07_field, '')).strip().upper()
+
+                if 'amount' in tc03_field.lower():
+                    try:
+                        exp_num = float(str(self.invoice_data.get(tc03_field, 0)).replace(',', ''))
+                        act_num = float(str(captured_data.get(tc07_field, 0)).replace(',', ''))
+                        status = "MATCH" if abs(exp_num - act_num) < 0.01 else "MISMATCH"
+                    except:
+                        status = "MATCH" if expected == actual else "MISMATCH"
+                elif expected and actual and (expected in actual or actual in expected):
+                    status = "MATCH"
+                elif not actual:
+                    status = "DATA MISSING"
+                else:
+                    status = "MISMATCH"
+
+                result = {
+                    'field': tc03_field,
+                    'expected': self.invoice_data.get(tc03_field, ''),
+                    'actual': captured_data.get(tc07_field, '(Blank)'),
+                    'status': status
+                }
+                verification_results.append(result)
+
+                icon = "+" if status == "MATCH" else "-"
+                print(f"  {icon} {tc03_field}: Expected='{result['expected']}' | Actual='{result['actual']}' | {status}")
+
+            self.tc07_verification_results = verification_results
+
+            # Step 6: Click Pay Now to complete payment
+            print("\n[STEP 6] Completing payment...")
+
+            pay_now_submit = self.page.locator("button:has-text('Pay Now')").last
+            if not pay_now_submit.is_visible(timeout=10000):
+                raise Exception("Pay Now submit button not found on form")
+
+            pay_now_submit.scroll_into_view_if_needed()
+            self.page.wait_for_timeout(500)
+            pay_now_submit.click()
+
+            # Step 7: Wait for and capture success popup
+            print("\n[STEP 7] Waiting for transaction success popup...")
+            self.page.wait_for_timeout(5000)
+
+            success_found = False
+            for selector in ["text=Transaction Successful", "text=Booking ID", "text=booked Successfully"]:
+                try:
+                    if self.page.locator(selector).first.is_visible(timeout=10000):
+                        success_found = True
+                        break
+                except:
+                    continue
+
+            if not success_found:
+                raise Exception("Transaction success popup not found")
+
+            screenshot_success = self._take_screenshot("TC_07_Transaction_Success")
+
+            # Capture transaction details with improved regex patterns
+            transaction_data = self.page.evaluate("""
+                () => {
+                    const data = {};
+                    const pageText = document.body.innerText;
+
+                    // Booking ID - format: OB followed by digits
+                    const bookingMatch = pageText.match(/Booking ID[\\s\\n]+([A-Z0-9]+)/);
+                    if (bookingMatch) data['Booking ID'] = bookingMatch[1];
+
+                    // Bank Name - First try to find common bank names (more reliable)
+                    const bankFallback = pageText.match(/(Bank of America|Chase Bank|Wells Fargo|Citibank|HSBC|JP Morgan|Goldman Sachs)/i);
+                    if (bankFallback) {
+                        data['Bank Name'] = bankFallback[1];
+                    } else {
+                        // Fallback: look for "Bank Name" label followed by value
+                        const bankMatch = pageText.match(/Bank Name[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\n)/i);
+                        if (bankMatch && !bankMatch[1].toLowerCase().includes('account')) {
+                            data['Bank Name'] = bankMatch[1].trim();
+                        }
+                    }
+
+                    // Account Holder - look for "Account Holder" label
+                    const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
+                    if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
+
+                    // Account Number - look for "Account Number" label followed by digits (exclude invoice-like patterns)
+                    const accMatch = pageText.match(/Account Number[\\s\\n]+(\\d{8,12})(?!\\d)/);
+                    if (accMatch) data['Account Number'] = accMatch[1];
+
+                    // BIC Code - look for "BIC Code" label followed by SWIFT format
+                    const bicMatch = pageText.match(/BIC Code[\\s\\n]+([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{0,3})/i);
+                    if (bicMatch) {
+                        data['BIC Code'] = bicMatch[1];
+                    } else {
+                        // Fallback: look for SWIFT code pattern (e.g., BOFAUS3NXXX)
+                        const bicFallback = pageText.match(/\\b([A-Z]{4}US[A-Z0-9]{2}[A-Z0-9]{0,3})\\b/);
+                        if (bicFallback) data['BIC Code'] = bicFallback[1];
+                    }
+
+                    return data;
+                }
+            """)
+
+            self.tc07_transaction_data = transaction_data
+            print("[SUCCESS] Transaction completed!")
+            print(f"  Booking ID: {transaction_data.get('Booking ID', 'N/A')}")
+            print(f"  Bank Name: {transaction_data.get('Bank Name', 'N/A')}")
+            print(f"  Account Holder: {transaction_data.get('Account Holder', 'N/A')}")
+            print(f"  Account Number: {transaction_data.get('Account Number', 'N/A')}")
+            print(f"  BIC Code: {transaction_data.get('BIC Code', 'N/A')}")
+
+            # Step 8: Close popup
+            print("\n[STEP 8] Closing success popup...")
+            close_btn = self.page.locator("button:has-text('Close')").first
+            if close_btn.is_visible(timeout=5000):
+                close_btn.click()
+                self.page.wait_for_timeout(2000)
+                print("[STEP 8] Popup closed")
+
+            screenshot_final = self._take_screenshot("TC_07_Dashboard_After_Payment")
+
+            # Log success
+            self._log_result(
+                tc_id, scenario, "PASSED",
+                f"Invoice paid from Homepage. Booking ID: {transaction_data.get('Booking ID', 'N/A')}",
+                f"{screenshot_dashboard}, {screenshot_form}, {screenshot_success}"
+            )
+            return True
+
+        except Exception as e:
+            screenshot = self._take_screenshot("TC_07_FAILED")
             self._log_result(tc_id, scenario, "FAILED", str(e), screenshot)
             return False
 
@@ -2198,7 +2651,8 @@ class OmneyBusinessAutomation:
                     <h3 style="text-align: center; margin-bottom: 15px;">Transaction Success Details</h3>
                     <table style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 5px;">
                         <tr><td style="padding: 10px; color: white;">Booking ID</td><td style="padding: 10px; color: white; font-weight: bold;">{self.tc06_transaction_data.get('Booking ID', 'N/A')}</td></tr>
-                        <tr><td style="padding: 10px; color: white;">Bank</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Bank', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Bank Name</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Bank Name', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Account Holder</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Account Holder', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">Account Number</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Account Number', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">BIC Code</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('BIC Code', 'N/A')}</td></tr>
                     </table>
@@ -2217,6 +2671,57 @@ class OmneyBusinessAutomation:
                 {verification_rows_tc06}
             </table>
             {transaction_html}'''
+
+        # Generate TC_07 verification results HTML if available
+        tc07_html = ""
+        if self.tc07_verification_results:
+            verification_rows_tc07 = ""
+            for r in self.tc07_verification_results:
+                if r['status'] == 'MATCH':
+                    status_color = "green"
+                elif r['status'] == 'DATA MISSING':
+                    status_color = "orange"
+                else:
+                    status_color = "red"
+                verification_rows_tc07 += f'''
+                    <tr>
+                        <td>{r['field']}</td>
+                        <td>{r['expected']}</td>
+                        <td>{r['actual']}</td>
+                        <td style="color: {status_color}; font-weight: bold;">{r['status']}</td>
+                    </tr>'''
+
+            # Transaction success data for TC_07
+            transaction_html_tc07 = ""
+            if self.tc07_transaction_data:
+                transaction_html_tc07 = f'''
+                <div style="margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border-radius: 10px;">
+                    <h3 style="text-align: center; margin-bottom: 15px;">TC_07 Transaction Success Details (From Homepage)</h3>
+                    <table style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 5px;">
+                        <tr><td style="padding: 10px; color: white;">Booking ID</td><td style="padding: 10px; color: white; font-weight: bold;">{self.tc07_transaction_data.get('Booking ID', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Bank Name</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Bank Name', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Account Holder</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Account Holder', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Account Number</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Account Number', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">BIC Code</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('BIC Code', 'N/A')}</td></tr>
+                    </table>
+                </div>'''
+
+            tc07_html = f'''
+            <h2 class="section-title">TC_07 Data Verification Results (Pay Invoice from Homepage)</h2>
+            <p style="margin-bottom: 15px; color: #6c757d;">Verification of invoice data from Pay Invoice form (Direct Approve from Homepage)</p>
+            <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+                <strong>Key Difference from TC_06:</strong> TC_07 clicks Approve button directly from Homepage Pending Payables table (not from view page)
+            </div>
+            <table class="data-table">
+                <tr>
+                    <th>Field</th>
+                    <th>Expected (TC_03)</th>
+                    <th>Actual (Pay Invoice Form)</th>
+                    <th>Status</th>
+                </tr>
+                {verification_rows_tc07}
+            </table>
+            {transaction_html_tc07}'''
 
         report_content = f'''<!DOCTYPE html>
 <html lang="en">
@@ -2329,6 +2834,8 @@ class OmneyBusinessAutomation:
 
             {tc06_html}
 
+            {tc07_html}
+
             <h2 class="section-title" style="margin-top: 40px;">Environment Details</h2>
             <table class="data-table">
                 <tr><th>Parameter</th><th>Value</th></tr>
@@ -2407,16 +2914,111 @@ class OmneyBusinessAutomation:
                             # TC_06: Pay Invoice from View Page
                             if tc05_result or True:  # Run TC_06 even if TC_05 has minor failures
                                 tc06_result = self.tc_06_pay_invoice()
+
+                                # TC_07: Pay Invoice from Homepage
+                                # Note: TC_07 requires a new invoice, so we create one first
+                                if tc06_result:
+                                    # Create a new invoice for TC_07
+                                    print("\n[INFO] Creating new invoice for TC_07...")
+                                    print("[INFO] Logging out from Client and logging in as Vendor...")
+
+                                    # Logout from Client_Business
+                                    try:
+                                        logout_clicked = self.page.evaluate("""
+                                            () => {
+                                                const logoutBtn = document.querySelector('button:has-text("Logout"), a:has-text("Logout"), [class*="logout"]');
+                                                if (logoutBtn) { logoutBtn.click(); return true; }
+                                                const userMenu = document.querySelector('[class*="user"], [class*="profile"], [class*="avatar"]');
+                                                if (userMenu) { userMenu.click(); return 'menu'; }
+                                                return false;
+                                            }
+                                        """)
+                                        if logout_clicked == 'menu':
+                                            self.page.wait_for_timeout(1000)
+                                            self.page.locator("text=Logout").click()
+                                        self.page.wait_for_timeout(2000)
+                                    except:
+                                        pass
+
+                                    # Navigate to login page and login as Vendor
+                                    self.page.goto(f"{self.base_url}/login")
+                                    self.page.wait_for_load_state("networkidle")
+                                    self.page.wait_for_timeout(1000)
+
+                                    # Login as Vendor_Individual
+                                    vendor_email, vendor_password = self._get_credentials("Vendor_Individual")
+                                    email_input = self.page.locator("input[type='email'], input[type='text']").first
+                                    email_input.fill(vendor_email)
+                                    password_input = self.page.locator("input[type='password']").first
+                                    password_input.fill(vendor_password)
+                                    password_input.press("Enter")
+
+                                    try:
+                                        self.page.wait_for_url("**/dashboard", timeout=30000)
+                                    except:
+                                        login_btn = self.page.locator("button:has-text('Log in')").first
+                                        if login_btn.is_visible(timeout=2000):
+                                            login_btn.click()
+                                            self.page.wait_for_url("**/dashboard", timeout=30000)
+
+                                    self.page.wait_for_load_state("networkidle")
+                                    print("[INFO] Logged in as Vendor_Individual")
+
+                                    # Now create new invoice
+                                    tc03_for_tc07 = self.tc_03_raise_invoice()
+                                    if tc03_for_tc07:
+                                        # Logout from Vendor and login as Client for TC_07
+                                        print("[INFO] Logging out from Vendor and logging in as Client for TC_07...")
+                                        try:
+                                            self.page.evaluate("""
+                                                () => {
+                                                    const logoutBtn = document.querySelector('button:has-text("Logout"), a:has-text("Logout")');
+                                                    if (logoutBtn) { logoutBtn.click(); return true; }
+                                                    return false;
+                                                }
+                                            """)
+                                            self.page.wait_for_timeout(2000)
+                                        except:
+                                            pass
+
+                                        # Navigate to login and login as Client
+                                        self.page.goto(f"{self.base_url}/login")
+                                        self.page.wait_for_load_state("networkidle")
+                                        self.page.wait_for_timeout(1000)
+
+                                        client_email, client_password = self._get_credentials("Client_Business")
+                                        email_input = self.page.locator("input[type='email'], input[type='text']").first
+                                        email_input.fill(client_email)
+                                        password_input = self.page.locator("input[type='password']").first
+                                        password_input.fill(client_password)
+                                        password_input.press("Enter")
+
+                                        try:
+                                            self.page.wait_for_url("**/dashboard", timeout=30000)
+                                        except:
+                                            login_btn = self.page.locator("button:has-text('Log in')").first
+                                            if login_btn.is_visible(timeout=2000):
+                                                login_btn.click()
+                                                self.page.wait_for_url("**/dashboard", timeout=30000)
+
+                                        self.page.wait_for_load_state("networkidle")
+                                        print("[INFO] Logged in as Client_Business for TC_07")
+
+                                        tc07_result = self.tc_07_pay_invoice_homepage()
+                                    else:
+                                        print("[SKIP] TC_07 skipped - could not create new invoice")
+                                else:
+                                    print("[SKIP] TC_07 skipped due to TC_06 failure")
                             else:
-                                print("[SKIP] TC_06 skipped due to TC_05 failure")
+                                print("[SKIP] TC_06, TC_07 skipped due to TC_05 failure")
                         else:
-                            print("[SKIP] TC_05, TC_06 skipped due to TC_04 failure")
+                            print("[SKIP] TC_05, TC_06, TC_07 skipped due to TC_04 failure")
                     else:
-                        print("[SKIP] TC_04, TC_05, TC_06 skipped due to TC_03 failure")
+                        print("[SKIP] TC_04, TC_05, TC_06, TC_07 skipped due to TC_03 failure")
                 else:
-                    print("[SKIP] TC_03, TC_04, TC_05, TC_06 skipped due to TC_02 failure")
+                    print("[SKIP] TC_03, TC_04, TC_05, TC_06, TC_07 skipped due to TC_02 failure")
             else:
-                print("[SKIP] TC_02, TC_03, TC_04, TC_05, TC_06 skipped due to TC_01 failure")
+                print("[SKIP] TC_02, TC_03, TC_04, TC_05, TC_06, TC_07 skipped due to TC_01 failure")
 
             # Generate report
             self.generate_report()
@@ -2441,10 +3043,44 @@ class OmneyBusinessAutomation:
 
 def main():
     """Main entry point."""
-    # Set headless=True for CI/CD environments
-    # Set keep_browser_open=True to keep browser open after test completion
-    automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
-    automation.run_all_tests()
+    import sys
+    import json
+
+    # Check for command line arguments
+    if len(sys.argv) > 1 and sys.argv[1] == "--tc03-only":
+        # Run only TC_01, TC_02, TC_03 for TC_07 preparation
+        print("\n" + "="*70)
+        print("RUNNING TC_01, TC_02, TC_03 ONLY (For TC_07 Preparation)")
+        print("="*70)
+        automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
+        automation.setup()
+
+        tc01_result = automation.tc_01_url_verification()
+        if tc01_result:
+            tc02_result = automation.tc_02_login()
+            if tc02_result:
+                tc03_result = automation.tc_03_raise_invoice()
+                if tc03_result:
+                    print("\n" + "="*70)
+                    print("TC_01, TC_02, TC_03 COMPLETED SUCCESSFULLY!")
+                    print(f"Invoice Number: {automation.invoice_data.get('invoice_number', 'N/A')}")
+                    print("="*70)
+
+                    # Save invoice data to file for TC_07
+                    invoice_data_file = os.path.join(
+                        os.path.dirname(os.path.dirname(__file__)),
+                        "Reports", "tc07_invoice_data.json"
+                    )
+                    with open(invoice_data_file, 'w') as f:
+                        json.dump(automation.invoice_data, f, indent=2)
+                    print(f"Invoice data saved to: {invoice_data_file}")
+                    print("="*70)
+
+        automation.teardown()
+    else:
+        # Run all test cases
+        automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
+        automation.run_all_tests()
 
 
 if __name__ == "__main__":
