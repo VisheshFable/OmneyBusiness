@@ -1,0 +1,30 @@
+{
+  "excel_path": "D:\\Vishesh\\OmneyBusiness\\Testcase\\OB_Automation.xlsx",
+  "base_url": "https://qaoneob.remit.in",
+  "reports_base_dir": "D:\\Vishesh\\OmneyBusiness\\Reports",
+  "scripts_dir": "D:\\Vishesh\\OmneyBusiness\\Scripts",
+  "main_script": "omney_business_automation.py",
+  "browser": {
+    "headless": false,
+    "slow_mo": 500,
+    "timeout": 30000
+  },
+  "screenshots": {
+    "format": "png",
+    "full_page": false
+  },
+  "retry_logic": {
+    "max_attempts": 3,
+    "delay_ms": 2000
+  },
+  "credentials": {
+    "Vendor_Individual": {
+      "email": "visheshindindia@yopmail.com",
+      "password": "Password@2"
+    },
+    "Client_Business": {
+      "email": "ganeshthakurpm@yopmail.com",
+      "password": "Password@2"
+    }
+  }
+}

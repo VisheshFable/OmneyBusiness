@@ -1,0 +1,100 @@
+{
+  "common": {
+    "login_button": [
+      "text=Log in",
+      "button:has-text('Login')",
+      "[aria-label='Login']"
+    ],
+    "email_input": [
+      "input[type='email']",
+      "input[type='text']",
+      "input[name='email']"
+    ],
+    "password_input": [
+      "input[type='password']",
+      "input[name='password']"
+    ],
+    "dropdown": [
+      "[role='combobox']",
+      "select",
+      "button:has-text('Choose')"
+    ],
+    "close_button": [
+      "text=Close",
+      "button:has-text('Close')",
+      "[aria-label='Close']"
+    ],
+    "submit_button": [
+      "button[type='submit']",
+      "input[type='submit']"
+    ]
+  },
+  "invoice": {
+    "raise_invoice_btn": [
+      "text=Raise Invoice",
+      "button:has-text('Raise')",
+      "[aria-label='Raise Invoice']"
+    ],
+    "invoice_number": [
+      "input[placeholder*='Invoice']",
+      "input[name*='invoice']"
+    ],
+    "client_dropdown": [
+      "text=Choose a client",
+      "[aria-label='Client']"
+    ],
+    "purpose_dropdown": [
+      "text=Select Purpose",
+      "[aria-label='Purpose']"
+    ],
+    "currency_dropdown": [
+      "text=Select Currency",
+      "[aria-label='Currency']"
+    ],
+    "amount_input": [
+      "input[placeholder*='amount']",
+      "input[name*='amount']"
+    ],
+    "approve_button": [
+      "button:has-text('Approve')",
+      "text=Approve"
+    ]
+  },
+  "payment": {
+    "pay_now_btn": [
+      "text=Pay Now",
+      "button:has-text('Pay')",
+      "[aria-label='Pay Now']"
+    ],
+    "pay_invoice_btn": [
+      "text=Pay Invoice",
+      "button:has-text('Pay Invoice')"
+    ],
+    "choose_invoice_dropdown": [
+      "text=Choose invoice",
+      "text=Choose invoice or create new",
+      "[role='combobox']"
+    ]
+  },
+  "tables": {
+    "pending_receivables": [
+      "table",
+      "[role='table']"
+    ],
+    "pending_payables": [
+      "table",
+      "[role='table']"
+    ]
+  },
+  "navigation": {
+    "dashboard": [
+      "text=Dashboard",
+      "a[href*='dashboard']"
+    ],
+    "logout": [
+      "text=Logout",
+      "text=Sign out",
+      "[aria-label='Logout']"
+    ]
+  }
+}
