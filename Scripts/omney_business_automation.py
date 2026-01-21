@@ -3699,18 +3699,26 @@ class OmneyBusinessAutomation:
     # =========================================================================
     # Report Generation
     # =========================================================================
-    def generate_report(self):
-        """Generate test execution report in HTML format."""
-        report_path = self.reports_dir / f"Test_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    def generate_report(self, report_prefix: str = "Test_Report", test_results_subset: list = None):
+        """Generate test execution report in HTML format.
 
-        passed = sum(1 for r in self.test_results if r["status"] == "PASSED")
-        failed = sum(1 for r in self.test_results if r["status"] == "FAILED")
-        total = len(self.test_results)
+        Args:
+            report_prefix: Prefix for the report filename (default: "Test_Report")
+            test_results_subset: Specific test results to include (default: self.test_results)
+        """
+        report_path = self.reports_dir / f"{report_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+
+        # Use provided subset or default to all test results
+        results_to_report = test_results_subset if test_results_subset is not None else self.test_results
+
+        passed = sum(1 for r in results_to_report if r["status"] == "PASSED")
+        failed = sum(1 for r in results_to_report if r["status"] == "FAILED")
+        total = len(results_to_report)
         pass_rate = (passed / total * 100) if total > 0 else 0
 
         # Generate test case HTML blocks
         test_cases_html = ""
-        for result in self.test_results:
+        for result in results_to_report:
             status_class = "passed" if result["status"] == "PASSED" else "failed"
             status_icon = "&#10003;" if result["status"] == "PASSED" else "&#10007;"
             screenshots = result.get('screenshot', '').split(', ')
@@ -4403,6 +4411,17 @@ class OmneyBusinessAutomation:
             else:
                 print("[SKIP] TC_02, TC_03, TC_04, TC_05, TC_06, TC_07, TC_08 skipped due to TC_01 failure")
 
+            # Generate report for TC_01-08
+            print("\n" + "="*70)
+            print("GENERATING REPORT FOR TC_01-08")
+            print("="*70)
+            self.tc01_08_results = self.test_results.copy()
+            self.generate_report(report_prefix="TC_01-08_Report", test_results_subset=self.tc01_08_results)
+            print("="*70)
+
+            # Clear test results for TC_09
+            self.test_results = []
+
             # TC_09: Complete invoice creation and payment flow with Individual client
             print("\n" + "="*70)
             print("EXECUTING TC_09: Invoice Creation and Payment with Individual Client")
@@ -4418,8 +4437,12 @@ class OmneyBusinessAutomation:
                 print(f"[ERROR] TC_09 execution error: {e}")
             print("="*70)
 
-            # Generate report
-            self.generate_report()
+            # Generate separate report for TC_09
+            print("\n" + "="*70)
+            print("GENERATING REPORT FOR TC_09")
+            print("="*70)
+            self.generate_report(report_prefix="TC_09_Report")
+            print("="*70)
 
         except Exception as e:
             print(f"[CRITICAL ERROR] {e}")
@@ -4431,9 +4454,28 @@ class OmneyBusinessAutomation:
         print("\n" + "="*70)
         print("TEST EXECUTION SUMMARY")
         print("="*70)
-        for result in self.test_results:
-            status_icon = "✓" if result["status"] == "PASSED" else "✗"
-            print(f"  {status_icon} {result['tc_id']}: {result['status']}")
+
+        # Show TC_01-08 results
+        if hasattr(self, 'tc01_08_results') and self.tc01_08_results:
+            print("\nTC_01-08 (Business Client Flow):")
+            for result in self.tc01_08_results:
+                status_icon = "✓" if result["status"] == "PASSED" else "✗"
+                print(f"  {status_icon} {result['tc_id']}: {result['status']}")
+
+        # Show TC_09 results
+        if self.test_results:
+            print("\nTC_09 (Individual Client Flow):")
+            for result in self.test_results:
+                status_icon = "✓" if result["status"] == "PASSED" else "✗"
+                print(f"  {status_icon} {result['tc_id']}: {result['status']}")
+
+        # Calculate overall statistics
+        all_results = (self.tc01_08_results if hasattr(self, 'tc01_08_results') else []) + self.test_results
+        total_passed = sum(1 for r in all_results if r["status"] == "PASSED")
+        total_failed = sum(1 for r in all_results if r["status"] == "FAILED")
+
+        print("\n" + "-"*70)
+        print(f"Overall: {total_passed} PASSED, {total_failed} FAILED (Total: {len(all_results)} tests)")
         print("="*70)
         print(f"End Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*70)
@@ -4490,7 +4532,7 @@ def main():
                 print("\n" + "="*70)
                 print("TC_09 COMPLETED SUCCESSFULLY!")
                 print("="*70)
-            automation.generate_report()
+            automation.generate_report(report_prefix="TC_09_Report")
         finally:
             automation.teardown()
     else:
