@@ -2453,35 +2453,21 @@ class OmneyBusinessAutomation:
                     const bookingMatch = pageText.match(/Booking ID[\\s\\n]+([A-Z0-9]+)/);
                     if (bookingMatch) data['Booking ID'] = bookingMatch[1];
 
-                    // Bank Name - First try to find common bank names (more reliable)
-                    const bankFallback = pageText.match(/(Bank of America|Chase Bank|Wells Fargo|Citibank|HSBC|JP Morgan|Goldman Sachs)/i);
-                    if (bankFallback) {
-                        data['Bank Name'] = bankFallback[1];
-                    } else {
-                        // Fallback: look for "Bank Name" label followed by value
-                        const bankMatch = pageText.match(/Bank Name[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\n)/i);
-                        if (bankMatch && !bankMatch[1].toLowerCase().includes('account')) {
-                            data['Bank Name'] = bankMatch[1].trim();
-                        }
-                    }
-
                     // Account Holder - look for "Account Holder" label
                     const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number - look for "Account Number" label followed by digits (exclude invoice-like patterns)
-                    const accMatch = pageText.match(/Account Number[\\s\\n]+(\\d{8,12})(?!\\d)/);
+                    // Account Number - look for alphanumeric with hyphens (e.g., 5afbaad5f-f62f-cb23-9560-1b444efaedf7)
+                    const accMatch = pageText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
-                    // BIC Code - look for "BIC Code" label followed by SWIFT format
-                    const bicMatch = pageText.match(/BIC Code[\\s\\n]+([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{0,3})/i);
-                    if (bicMatch) {
-                        data['BIC Code'] = bicMatch[1];
-                    } else {
-                        // Fallback: look for SWIFT code pattern (e.g., BOFAUS3NXXX)
-                        const bicFallback = pageText.match(/\\b([A-Z]{4}US[A-Z0-9]{2}[A-Z0-9]{0,3})\\b/);
-                        if (bicFallback) data['BIC Code'] = bicFallback[1];
-                    }
+                    // Branch Code - look for "Branch Code" label followed by value
+                    const branchMatch = pageText.match(/Branch Code[\\s\\n]+([A-Z0-9]+)/i);
+                    if (branchMatch) data['Branch Code'] = branchMatch[1];
+
+                    // Routing Number - look for "Routing number" label followed by digits
+                    const routingMatch = pageText.match(/Routing number[\\s\\n]+(\\d+)/i);
+                    if (routingMatch) data['Routing Number'] = routingMatch[1];
 
                     return data;
                 }
@@ -2490,10 +2476,10 @@ class OmneyBusinessAutomation:
             self.tc06_transaction_data = transaction_data
             print("[SUCCESS] Transaction completed!")
             print(f"  Booking ID: {transaction_data.get('Booking ID', 'N/A')}")
-            print(f"  Bank Name: {transaction_data.get('Bank Name', 'N/A')}")
             print(f"  Account Holder: {transaction_data.get('Account Holder', 'N/A')}")
             print(f"  Account Number: {transaction_data.get('Account Number', 'N/A')}")
-            print(f"  BIC Code: {transaction_data.get('BIC Code', 'N/A')}")
+            print(f"  Branch Code: {transaction_data.get('Branch Code', 'N/A')}")
+            print(f"  Routing Number: {transaction_data.get('Routing Number', 'N/A')}")
 
             # Step 9: Close popup
             print("\n[STEP 9] Closing success popup...")
@@ -2883,35 +2869,21 @@ class OmneyBusinessAutomation:
                     const bookingMatch = pageText.match(/Booking ID[\\s\\n]+([A-Z0-9]+)/);
                     if (bookingMatch) data['Booking ID'] = bookingMatch[1];
 
-                    // Bank Name - First try to find common bank names (more reliable)
-                    const bankFallback = pageText.match(/(Bank of America|Chase Bank|Wells Fargo|Citibank|HSBC|JP Morgan|Goldman Sachs)/i);
-                    if (bankFallback) {
-                        data['Bank Name'] = bankFallback[1];
-                    } else {
-                        // Fallback: look for "Bank Name" label followed by value
-                        const bankMatch = pageText.match(/Bank Name[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\n)/i);
-                        if (bankMatch && !bankMatch[1].toLowerCase().includes('account')) {
-                            data['Bank Name'] = bankMatch[1].trim();
-                        }
-                    }
-
                     // Account Holder - look for "Account Holder" label
                     const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number - look for "Account Number" label followed by digits (exclude invoice-like patterns)
-                    const accMatch = pageText.match(/Account Number[\\s\\n]+(\\d{8,12})(?!\\d)/);
+                    // Account Number - look for alphanumeric with hyphens (e.g., 5afbaad5f-f62f-cb23-9560-1b444efaedf7)
+                    const accMatch = pageText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
-                    // BIC Code - look for "BIC Code" label followed by SWIFT format
-                    const bicMatch = pageText.match(/BIC Code[\\s\\n]+([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{0,3})/i);
-                    if (bicMatch) {
-                        data['BIC Code'] = bicMatch[1];
-                    } else {
-                        // Fallback: look for SWIFT code pattern (e.g., BOFAUS3NXXX)
-                        const bicFallback = pageText.match(/\\b([A-Z]{4}US[A-Z0-9]{2}[A-Z0-9]{0,3})\\b/);
-                        if (bicFallback) data['BIC Code'] = bicFallback[1];
-                    }
+                    // Branch Code - look for "Branch Code" label followed by value
+                    const branchMatch = pageText.match(/Branch Code[\\s\\n]+([A-Z0-9]+)/i);
+                    if (branchMatch) data['Branch Code'] = branchMatch[1];
+
+                    // Routing Number - look for "Routing number" label followed by digits
+                    const routingMatch = pageText.match(/Routing number[\\s\\n]+(\\d+)/i);
+                    if (routingMatch) data['Routing Number'] = routingMatch[1];
 
                     return data;
                 }
@@ -2920,10 +2892,10 @@ class OmneyBusinessAutomation:
             self.tc07_transaction_data = transaction_data
             print("[SUCCESS] Transaction completed!")
             print(f"  Booking ID: {transaction_data.get('Booking ID', 'N/A')}")
-            print(f"  Bank Name: {transaction_data.get('Bank Name', 'N/A')}")
             print(f"  Account Holder: {transaction_data.get('Account Holder', 'N/A')}")
             print(f"  Account Number: {transaction_data.get('Account Number', 'N/A')}")
-            print(f"  BIC Code: {transaction_data.get('BIC Code', 'N/A')}")
+            print(f"  Branch Code: {transaction_data.get('Branch Code', 'N/A')}")
+            print(f"  Routing Number: {transaction_data.get('Routing Number', 'N/A')}")
 
             # Step 8: Close popup
             print("\n[STEP 8] Closing success popup...")
@@ -3419,33 +3391,21 @@ class OmneyBusinessAutomation:
                     const bookingMatch = pageText.match(/Booking ID[\\s\\n]+([A-Z0-9]+)/);
                     if (bookingMatch) data['Booking ID'] = bookingMatch[1];
 
-                    // Bank Name
-                    const bankFallback = pageText.match(/(Bank of America|Chase Bank|Wells Fargo|Citibank|HSBC|JP Morgan|Goldman Sachs)/i);
-                    if (bankFallback) {
-                        data['Bank Name'] = bankFallback[1];
-                    } else {
-                        const bankMatch = pageText.match(/Bank Name[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\n)/i);
-                        if (bankMatch && !bankMatch[1].toLowerCase().includes('account')) {
-                            data['Bank Name'] = bankMatch[1].trim();
-                        }
-                    }
-
                     // Account Holder
                     const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number
-                    const accMatch = pageText.match(/Account Number[\\s\\n]+(\\d{8,12})(?!\\d)/);
+                    // Account Number - look for alphanumeric with hyphens (e.g., 5afbaad5f-f62f-cb23-9560-1b444efaedf7)
+                    const accMatch = pageText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
-                    // BIC Code
-                    const bicMatch = pageText.match(/BIC Code[\\s\\n]+([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{0,3})/i);
-                    if (bicMatch) {
-                        data['BIC Code'] = bicMatch[1];
-                    } else {
-                        const bicFallback = pageText.match(/\\b([A-Z]{4}US[A-Z0-9]{2}[A-Z0-9]{0,3})\\b/);
-                        if (bicFallback) data['BIC Code'] = bicFallback[1];
-                    }
+                    // Branch Code - look for "Branch Code" label followed by value
+                    const branchMatch = pageText.match(/Branch Code[\\s\\n]+([A-Z0-9]+)/i);
+                    if (branchMatch) data['Branch Code'] = branchMatch[1];
+
+                    // Routing Number - look for "Routing number" label followed by digits
+                    const routingMatch = pageText.match(/Routing number[\\s\\n]+(\\d+)/i);
+                    if (routingMatch) data['Routing Number'] = routingMatch[1];
 
                     return data;
                 }
@@ -3454,10 +3414,10 @@ class OmneyBusinessAutomation:
             self.tc08_transaction_data = transaction_data
             print("[SUCCESS] Transaction completed!")
             print(f"  Booking ID: {transaction_data.get('Booking ID', 'N/A')}")
-            print(f"  Bank Name: {transaction_data.get('Bank Name', 'N/A')}")
             print(f"  Account Holder: {transaction_data.get('Account Holder', 'N/A')}")
             print(f"  Account Number: {transaction_data.get('Account Number', 'N/A')}")
-            print(f"  BIC Code: {transaction_data.get('BIC Code', 'N/A')}")
+            print(f"  Branch Code: {transaction_data.get('Branch Code', 'N/A')}")
+            print(f"  Routing Number: {transaction_data.get('Routing Number', 'N/A')}")
 
             # Step 8: Close popup
             print("\n[STEP 8] Closing success popup...")
@@ -3898,10 +3858,10 @@ class OmneyBusinessAutomation:
                     <h3 style="text-align: center; margin-bottom: 15px;">Transaction Success Details</h3>
                     <table style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 5px;">
                         <tr><td style="padding: 10px; color: white;">Booking ID</td><td style="padding: 10px; color: white; font-weight: bold;">{self.tc06_transaction_data.get('Booking ID', 'N/A')}</td></tr>
-                        <tr><td style="padding: 10px; color: white;">Bank Name</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Bank Name', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">Account Holder</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Account Holder', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">Account Number</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Account Number', 'N/A')}</td></tr>
-                        <tr><td style="padding: 10px; color: white;">BIC Code</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('BIC Code', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Branch Code</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Branch Code', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Routing Number</td><td style="padding: 10px; color: white;">{self.tc06_transaction_data.get('Routing Number', 'N/A')}</td></tr>
                     </table>
                 </div>'''
 
@@ -3946,10 +3906,10 @@ class OmneyBusinessAutomation:
                     <h3 style="text-align: center; margin-bottom: 15px;">TC_07 Transaction Success Details (From Homepage)</h3>
                     <table style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 5px;">
                         <tr><td style="padding: 10px; color: white;">Booking ID</td><td style="padding: 10px; color: white; font-weight: bold;">{self.tc07_transaction_data.get('Booking ID', 'N/A')}</td></tr>
-                        <tr><td style="padding: 10px; color: white;">Bank Name</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Bank Name', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">Account Holder</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Account Holder', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">Account Number</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Account Number', 'N/A')}</td></tr>
-                        <tr><td style="padding: 10px; color: white;">BIC Code</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('BIC Code', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Branch Code</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Branch Code', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Routing Number</td><td style="padding: 10px; color: white;">{self.tc07_transaction_data.get('Routing Number', 'N/A')}</td></tr>
                     </table>
                 </div>'''
 
@@ -3996,10 +3956,10 @@ class OmneyBusinessAutomation:
                     <h3 style="text-align: center; margin-bottom: 15px;">TC_08 Transaction Success Details (Pay Invoice Page Dropdown)</h3>
                     <table style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 5px;">
                         <tr><td style="padding: 10px; color: white;">Booking ID</td><td style="padding: 10px; color: white; font-weight: bold;">{self.tc08_transaction_data.get('Booking ID', 'N/A')}</td></tr>
-                        <tr><td style="padding: 10px; color: white;">Bank Name</td><td style="padding: 10px; color: white;">{self.tc08_transaction_data.get('Bank Name', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">Account Holder</td><td style="padding: 10px; color: white;">{self.tc08_transaction_data.get('Account Holder', 'N/A')}</td></tr>
                         <tr><td style="padding: 10px; color: white;">Account Number</td><td style="padding: 10px; color: white;">{self.tc08_transaction_data.get('Account Number', 'N/A')}</td></tr>
-                        <tr><td style="padding: 10px; color: white;">BIC Code</td><td style="padding: 10px; color: white;">{self.tc08_transaction_data.get('BIC Code', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Branch Code</td><td style="padding: 10px; color: white;">{self.tc08_transaction_data.get('Branch Code', 'N/A')}</td></tr>
+                        <tr><td style="padding: 10px; color: white;">Routing Number</td><td style="padding: 10px; color: white;">{self.tc08_transaction_data.get('Routing Number', 'N/A')}</td></tr>
                     </table>
                 </div>'''
 
