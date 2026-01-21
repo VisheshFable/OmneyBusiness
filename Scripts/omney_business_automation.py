@@ -2453,20 +2453,24 @@ class OmneyBusinessAutomation:
                     const bookingMatch = pageText.match(/Booking ID[\\s\\n]+([A-Z0-9]+)/);
                     if (bookingMatch) data['Booking ID'] = bookingMatch[1];
 
-                    // Account Holder - look for "Account Holder" label
-                    const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
+                    // Extract the "Send Money To" section to avoid confusion with Invoice Number
+                    const sendMoneySection = pageText.match(/Send Money To[\\s\\S]*?(?=\\n\\n|Close|$)/i);
+                    const sectionText = sendMoneySection ? sendMoneySection[0] : pageText;
+
+                    // Account Holder - look for "Account Holder" label in section
+                    const holderMatch = sectionText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number - look for alphanumeric with hyphens, but exclude "Invoice Number" matches
-                    const accMatch = pageText.match(/(?<!Invoice )Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
+                    // Account Number - look for alphanumeric with hyphens in section (not Invoice Number)
+                    const accMatch = sectionText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]{20,})/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
                     // Branch Code - look for "Branch Code" label followed by value
-                    const branchMatch = pageText.match(/Branch Code[\\s\\n]+([A-Z0-9]+)/i);
+                    const branchMatch = sectionText.match(/Branch Code[\\s\\n]+([A-Z0-9]+)/i);
                     if (branchMatch) data['Branch Code'] = branchMatch[1];
 
                     // Routing Number - look for "Routing number" label followed by digits
-                    const routingMatch = pageText.match(/Routing number[\\s\\n]+(\\d+)/i);
+                    const routingMatch = sectionText.match(/Routing number[\\s\\n]+(\\d+)/i);
                     if (routingMatch) data['Routing Number'] = routingMatch[1];
 
                     return data;
@@ -2869,20 +2873,24 @@ class OmneyBusinessAutomation:
                     const bookingMatch = pageText.match(/Booking ID[\\s\\n]+([A-Z0-9]+)/);
                     if (bookingMatch) data['Booking ID'] = bookingMatch[1];
 
-                    // Account Holder - look for "Account Holder" label
-                    const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
+                    // Extract the "Send Money To" section to avoid confusion with Invoice Number
+                    const sendMoneySection = pageText.match(/Send Money To[\\s\\S]*?(?=\\n\\n|Close|$)/i);
+                    const sectionText = sendMoneySection ? sendMoneySection[0] : pageText;
+
+                    // Account Holder - look for "Account Holder" label in section
+                    const holderMatch = sectionText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number - look for alphanumeric with hyphens, but exclude "Invoice Number" matches
-                    const accMatch = pageText.match(/(?<!Invoice )Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
+                    // Account Number - look for alphanumeric with hyphens in section (not Invoice Number)
+                    const accMatch = sectionText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]{20,})/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
                     // Branch Code - look for "Branch Code" label followed by value
-                    const branchMatch = pageText.match(/Branch Code[\\s\\n]+([A-Z0-9]+)/i);
+                    const branchMatch = sectionText.match(/Branch Code[\\s\\n]+([A-Z0-9]+)/i);
                     if (branchMatch) data['Branch Code'] = branchMatch[1];
 
                     // Routing Number - look for "Routing number" label followed by digits
-                    const routingMatch = pageText.match(/Routing number[\\s\\n]+(\\d+)/i);
+                    const routingMatch = sectionText.match(/Routing number[\\s\\n]+(\\d+)/i);
                     if (routingMatch) data['Routing Number'] = routingMatch[1];
 
                     return data;
