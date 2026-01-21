@@ -4403,6 +4403,21 @@ class OmneyBusinessAutomation:
             else:
                 print("[SKIP] TC_02, TC_03, TC_04, TC_05, TC_06, TC_07, TC_08 skipped due to TC_01 failure")
 
+            # TC_09: Complete invoice creation and payment flow with Individual client
+            print("\n" + "="*70)
+            print("EXECUTING TC_09: Invoice Creation and Payment with Individual Client")
+            print("="*70)
+            try:
+                self._load_test_data()
+                tc09_result = self.tc_09_raise_and_pay_invoice_individual()
+                if tc09_result:
+                    print("[SUCCESS] TC_09 completed successfully")
+                else:
+                    print("[FAILED] TC_09 execution failed")
+            except Exception as e:
+                print(f"[ERROR] TC_09 execution error: {e}")
+            print("="*70)
+
             # Generate report
             self.generate_report()
 
