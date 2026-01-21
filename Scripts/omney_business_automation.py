@@ -2457,8 +2457,8 @@ class OmneyBusinessAutomation:
                     const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number - look for alphanumeric with hyphens (e.g., 5afbaad5f-f62f-cb23-9560-1b444efaedf7)
-                    const accMatch = pageText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
+                    // Account Number - look for alphanumeric with hyphens, but exclude "Invoice Number" matches
+                    const accMatch = pageText.match(/(?<!Invoice )Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
                     // Branch Code - look for "Branch Code" label followed by value
@@ -2873,8 +2873,8 @@ class OmneyBusinessAutomation:
                     const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number - look for alphanumeric with hyphens (e.g., 5afbaad5f-f62f-cb23-9560-1b444efaedf7)
-                    const accMatch = pageText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
+                    // Account Number - look for alphanumeric with hyphens, but exclude "Invoice Number" matches
+                    const accMatch = pageText.match(/(?<!Invoice )Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
                     // Branch Code - look for "Branch Code" label followed by value
@@ -3395,8 +3395,8 @@ class OmneyBusinessAutomation:
                     const holderMatch = pageText.match(/Account Holder[\\s\\n]+([A-Za-z][A-Za-z\\s]+?)(?=\\nAccount Number|\\n|$)/i);
                     if (holderMatch) data['Account Holder'] = holderMatch[1].trim();
 
-                    // Account Number - look for alphanumeric with hyphens (e.g., 5afbaad5f-f62f-cb23-9560-1b444efaedf7)
-                    const accMatch = pageText.match(/Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
+                    // Account Number - look for alphanumeric with hyphens, but exclude "Invoice Number" matches
+                    const accMatch = pageText.match(/(?<!Invoice )Account Number[\\s\\n]+([a-zA-Z0-9\\-]+)/);
                     if (accMatch) data['Account Number'] = accMatch[1];
 
                     // Branch Code - look for "Branch Code" label followed by value
