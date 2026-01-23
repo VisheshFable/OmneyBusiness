@@ -893,11 +893,41 @@ class OmneyBusinessAutomation:
                     continue
 
             self.page.wait_for_timeout(500)
+            purpose_selected = False
             try:
-                self.page.locator(f"text={purpose}").first.click(timeout=3000)
+                # First try: exact text match
+                self.page.get_by_text(purpose, exact=True).first.click(timeout=2000)
+                purpose_selected = True
+                print(f"    [DEBUG] Selected Purpose using exact match: {purpose}")
             except:
-                self.page.keyboard.type(purpose[:3])
+                try:
+                    # Second try: partial match (contains the text)
+                    # This handles cases like "Family Maintenance" vs "Family Maintainance test1"
+                    self.page.get_by_role("option", name=purpose).first.click(timeout=2000)
+                    purpose_selected = True
+                    print(f"    [DEBUG] Selected Purpose using role=option: {purpose}")
+                except:
+                    try:
+                        # Third try: filter options by partial text
+                        options = self.page.locator("[role='option']").all()
+                        for option in options:
+                            option_text = option.inner_text()
+                            # Check if option contains key words from purpose
+                            purpose_words = purpose.lower().split()
+                            if all(word in option_text.lower() for word in purpose_words if len(word) > 3):
+                                option.click()
+                                purpose_selected = True
+                                print(f"    [DEBUG] Selected Purpose by matching keywords: {option_text}")
+                                break
+                    except:
+                        pass
+
+            if not purpose_selected:
+                # Fallback: type first few characters and Enter
+                self.page.keyboard.type(purpose[:5])
                 self.page.keyboard.press("Enter")
+                print(f"    [DEBUG] Selected Purpose using keyboard: {purpose[:5]}...")
+
             print(f"  - Purpose: {purpose}")
 
             # Select Currency - try multiple approaches
@@ -918,11 +948,26 @@ class OmneyBusinessAutomation:
                     continue
 
             self.page.wait_for_timeout(500)
+            currency_selected = False
             try:
-                self.page.locator(f"text={currency}").first.click(timeout=3000)
+                # First try: exact text match
+                self.page.get_by_text(currency, exact=True).first.click(timeout=2000)
+                currency_selected = True
+                print(f"    [DEBUG] Selected Currency using exact match: {currency}")
             except:
+                try:
+                    # Second try: using role=option
+                    self.page.get_by_role("option", name=currency).first.click(timeout=2000)
+                    currency_selected = True
+                    print(f"    [DEBUG] Selected Currency using role=option: {currency}")
+                except:
+                    pass
+
+            if not currency_selected:
+                # Fallback: type currency code and Enter
                 self.page.keyboard.type(currency)
                 self.page.keyboard.press("Enter")
+                print(f"    [DEBUG] Selected Currency using keyboard: {currency}")
             print(f"  - Currency: {currency}")
 
             # Fill Amount - try multiple selectors
@@ -2334,23 +2379,57 @@ class OmneyBusinessAutomation:
                     }
 
                     // ========== Purpose and Source of Funds Section ==========
-                    // Purpose - Look in select dropdowns for Purpose value
+                    // Purpose - First try native select elements
                     for (const sel of allSelects) {
                         const selectedOpt = sel.options[sel.selectedIndex];
                         if (selectedOpt) {
                             const txt = selectedOpt.text || selectedOpt.value;
-                            if (txt && (txt.toLowerCase().includes('purpose') ||
-                                       txt.toLowerCase().includes('demo') ||
-                                       txt.toLowerCase().includes('payment'))) {
+                            if (txt && !txt.toLowerCase().includes('select') &&
+                               (txt.toLowerCase().includes('purpose') ||
+                                txt.toLowerCase().includes('demo') ||
+                                txt.toLowerCase().includes('maintenance') ||
+                                txt.toLowerCase().includes('payment') ||
+                                txt.toLowerCase().includes('family'))) {
                                 data['Purpose'] = txt;
                                 break;
                             }
                         }
                     }
-                    // Fallback: Look for "Demo Purpose" text pattern
+
+                    // Second try: Look for custom dropdowns with "Purpose" label
                     if (!data['Purpose']) {
-                        const purposeMatch = pageText.match(/(Demo Purpose|Payment Purpose|Business Purpose|Trade Purpose)/i);
-                        if (purposeMatch) data['Purpose'] = purposeMatch[1];
+                        const labels = document.querySelectorAll('label');
+                        for (const label of labels) {
+                            if (label.textContent.toLowerCase().includes('purpose')) {
+                                // Find the associated input/div
+                                const container = label.closest('div');
+                                if (container) {
+                                    // Look for selected value in nearby divs
+                                    const valueDiv = container.querySelector('[class*="singleValue"], [class*="value"], input[value]');
+                                    if (valueDiv) {
+                                        const val = valueDiv.textContent || valueDiv.value;
+                                        if (val && !val.toLowerCase().includes('select')) {
+                                            data['Purpose'] = val.trim();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Third try: Look for elements with "Purpose" nearby text
+                    if (!data['Purpose']) {
+                        const purposeTexts = document.evaluate(
+                            "//text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'purpose')]/following::div[1]",
+                            document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                        ).singleNodeValue;
+                        if (purposeTexts) {
+                            const val = purposeTexts.textContent.trim();
+                            if (val && !val.toLowerCase().includes('select') && val.length < 50) {
+                                data['Purpose'] = val;
+                            }
+                        }
                     }
 
                     // Invoice Document
@@ -2755,22 +2834,57 @@ class OmneyBusinessAutomation:
                         }
                     }
 
-                    // Purpose
+                    // Purpose - First try native select elements
                     for (const sel of allSelects) {
                         const selectedOpt = sel.options[sel.selectedIndex];
                         if (selectedOpt) {
                             const txt = selectedOpt.text || selectedOpt.value;
-                            if (txt && (txt.toLowerCase().includes('purpose') ||
-                                       txt.toLowerCase().includes('demo') ||
-                                       txt.toLowerCase().includes('payment'))) {
+                            if (txt && !txt.toLowerCase().includes('select') &&
+                               (txt.toLowerCase().includes('purpose') ||
+                                txt.toLowerCase().includes('demo') ||
+                                txt.toLowerCase().includes('maintenance') ||
+                                txt.toLowerCase().includes('payment') ||
+                                txt.toLowerCase().includes('family'))) {
                                 data['Purpose'] = txt;
                                 break;
                             }
                         }
                     }
+
+                    // Second try: Look for custom dropdowns with "Purpose" label
                     if (!data['Purpose']) {
-                        const purposeMatch = pageText.match(/(Demo Purpose|Payment Purpose|Business Purpose|Trade Purpose)/i);
-                        if (purposeMatch) data['Purpose'] = purposeMatch[1];
+                        const labels = document.querySelectorAll('label');
+                        for (const label of labels) {
+                            if (label.textContent.toLowerCase().includes('purpose')) {
+                                // Find the associated input/div
+                                const container = label.closest('div');
+                                if (container) {
+                                    // Look for selected value in nearby divs
+                                    const valueDiv = container.querySelector('[class*="singleValue"], [class*="value"], input[value]');
+                                    if (valueDiv) {
+                                        const val = valueDiv.textContent || valueDiv.value;
+                                        if (val && !val.toLowerCase().includes('select')) {
+                                            data['Purpose'] = val.trim();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Third try: Look for elements with "Purpose" nearby text
+                    if (!data['Purpose']) {
+                        const purposeTexts = document.evaluate(
+                            "//text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'purpose')]/following::div[1]",
+                            document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                        ).singleNodeValue;
+                        if (purposeTexts) {
+                            const val = purposeTexts.textContent.trim();
+                            if (val && !val.toLowerCase().includes('select') && val.length < 50) {
+                                data['Purpose'] = val;
+                            }
+                        }
                     }
 
                     // Invoice Document
