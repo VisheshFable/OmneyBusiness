@@ -844,15 +844,25 @@ class OmneyBusinessAutomation:
                 except:
                     pass
 
-            # Approach 4: Try div/li/span containing client name
+            # Approach 4: Try div/li/span containing client name (with role filtering)
             if not client_selected:
                 try:
-                    for tag in ["div", "li", "span", "p"]:
-                        option = self.page.locator(f"{tag}:has-text('{client_name}')").first
+                    # Look for options with role attribute or within dropdown containers
+                    for tag in ["div", "li", "span"]:
+                        # Try to find elements with role=option first
+                        option = self.page.locator(f"{tag}[role='option']:has-text('{client_name}')").first
                         if option.is_visible(timeout=1000):
                             option.click()
                             client_selected = True
-                            print(f"    [DEBUG] Selected client using {tag} element")
+                            print(f"    [DEBUG] Selected client using {tag}[role=option] element")
+                            break
+
+                        # If no role attribute, try elements within a listbox/menu
+                        option = self.page.locator(f"[role='listbox'] {tag}:has-text('{client_name}'), [role='menu'] {tag}:has-text('{client_name}')").first
+                        if option.is_visible(timeout=1000):
+                            option.click()
+                            client_selected = True
+                            print(f"    [DEBUG] Selected client using {tag} within dropdown")
                             break
                 except:
                     pass
@@ -871,6 +881,43 @@ class OmneyBusinessAutomation:
 
             # Wait for client details to populate
             self.page.wait_for_timeout(1500)
+
+            # Verify client selection by checking if dropdown value changed
+            try:
+                # Check if "Choose a client" placeholder is still visible (means selection failed)
+                placeholder_still_visible = self.page.locator("text=Choose a client").first.is_visible(timeout=1000)
+                if placeholder_still_visible:
+                    print(f"    [ERROR] Client selection verification FAILED - placeholder still visible")
+                    print(f"    [ERROR] The dropdown shows 'Choose a client' instead of '{client_name}'")
+                    client_selected = False
+
+                    # Retry client selection one more time
+                    print(f"    [RETRY] Attempting client selection again...")
+                    try:
+                        # Re-click dropdown
+                        dropdown = self.page.locator("text=Choose a client").first
+                        dropdown.click()
+                        self.page.wait_for_timeout(1000)
+
+                        # Try role=option again
+                        option = self.page.get_by_role("option", name=client_name).first
+                        option.click()
+                        self.page.wait_for_timeout(2000)
+
+                        # Verify again
+                        if not self.page.locator("text=Choose a client").first.is_visible(timeout=1000):
+                            client_selected = True
+                            print(f"    [SUCCESS] Client selection successful on retry")
+                        else:
+                            print(f"    [ERROR] Client selection still failed after retry")
+                    except Exception as retry_error:
+                        print(f"    [ERROR] Retry failed: {retry_error}")
+                else:
+                    print(f"    [VERIFY] Client selection verified - dropdown value changed")
+            except:
+                # If we can't find "Choose a client", assume it's selected
+                print(f"    [VERIFY] Placeholder not found - assuming client is selected")
+                pass
 
             # Take screenshot after client selection
             self._take_screenshot("TC_03_After_Client_Selection")
