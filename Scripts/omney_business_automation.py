@@ -1489,22 +1489,43 @@ class OmneyBusinessAutomation:
                     const accMatch = pageText.match(/Account Number:\\s*\\n?\\s*([*\\d]+)/i);
                     if (accMatch) data['Account Number'] = accMatch[1].trim();
 
-                    // Currency
-                    const currMatch = pageText.match(/Currency:\\s*\\n?\\s*([A-Z]{3})?/i);
-                    data['Currency'] = currMatch && currMatch[1] ? currMatch[1].trim() : '';
-
                     // Country (in bank details section)
                     const countryMatch = pageText.match(/Country:\\s*\\n?\\s*([A-Za-z\\s]+?)\\s*(?:\\n|Attached)/i);
                     if (countryMatch) data['Country'] = countryMatch[1].trim();
 
-                    // Amount
-                    const amountMatch = pageText.match(/Amount Due\\s*\\n?\\s*([\\d,.]+)/i);
-                    if (amountMatch) data['Amount'] = amountMatch[1].trim();
+                    // Currency and Amount - extracted from "Payment Request" or "Amount Due" sections
+                    // Format is "Payment Request: USD 3585.05" or "Amount Due: USD 3585.05"
 
-                    // Alternative amount capture
+                    // Try Payment Request first (format: "Payment Request USD 3585.05" or "Payment Request: USD 3585.05")
+                    const paymentReqMatch = pageText.match(/Payment Request[:\\s]*([A-Z]{3})\\s+([\\d,.]+)/i);
+                    if (paymentReqMatch) {
+                        data['Currency'] = paymentReqMatch[1].trim().toUpperCase();
+                        data['Amount'] = paymentReqMatch[2].trim();
+                    }
+
+                    // Try Amount Due as fallback (format: "Amount Due USD 3585.05" or "Amount Due: USD 3585.05")
+                    if (!data['Currency'] || !data['Amount']) {
+                        const amountDueMatch = pageText.match(/Amount Due[:\\s]*([A-Z]{3})\\s+([\\d,.]+)/i);
+                        if (amountDueMatch) {
+                            if (!data['Currency']) data['Currency'] = amountDueMatch[1].trim().toUpperCase();
+                            if (!data['Amount']) data['Amount'] = amountDueMatch[2].trim();
+                        }
+                    }
+
+                    // Fallback: Try "Currency:" label format
+                    if (!data['Currency']) {
+                        const currMatch = pageText.match(/Currency:\\s*\\n?\\s*([A-Z]{3})/i);
+                        if (currMatch) data['Currency'] = currMatch[1].trim().toUpperCase();
+                    }
+
+                    // Fallback: Try numeric-only amount patterns
                     if (!data['Amount']) {
-                        const altAmountMatch = pageText.match(/Payment Request\\s*\\n?\\s*([\\d,.]+)/i);
-                        if (altAmountMatch) data['Amount'] = altAmountMatch[1].trim();
+                        const numAmountMatch = pageText.match(/Amount Due[:\\s]*([\\d,.]+)/i);
+                        if (numAmountMatch) data['Amount'] = numAmountMatch[1].trim();
+                    }
+                    if (!data['Amount']) {
+                        const numPayReqMatch = pageText.match(/Payment Request[:\\s]*([\\d,.]+)/i);
+                        if (numPayReqMatch) data['Amount'] = numPayReqMatch[1].trim();
                     }
 
                     // Attached Documents
@@ -1945,22 +1966,43 @@ class OmneyBusinessAutomation:
                     const accMatch = pageText.match(/Account Number:\\s*\\n?\\s*([*\\d]+)/i);
                     if (accMatch) data['Account Number'] = accMatch[1].trim();
 
-                    // Currency
-                    const currMatch = pageText.match(/Currency:\\s*\\n?\\s*([A-Z]{3})/i);
-                    if (currMatch) data['Currency'] = currMatch[1].trim();
-
                     // Country
                     const countryMatch = pageText.match(/Country:\\s*\\n?\\s*([A-Z]{2})/i);
                     if (countryMatch) data['Country'] = countryMatch[1].trim();
 
-                    // Amount
-                    const amountMatch = pageText.match(/Amount Due\\s*\\n?\\s*([\\d,.]+)/i);
-                    if (amountMatch) data['Amount'] = amountMatch[1].trim();
+                    // Currency and Amount - extracted from "Payment Request" or "Amount Due" sections
+                    // Format is "Payment Request: USD 3585.05" or "Amount Due: USD 3585.05"
 
-                    // Alternative amount
+                    // Try Payment Request first (format: "Payment Request USD 3585.05" or "Payment Request: USD 3585.05")
+                    const paymentReqMatch = pageText.match(/Payment Request[:\\s]*([A-Z]{3})\\s+([\\d,.]+)/i);
+                    if (paymentReqMatch) {
+                        data['Currency'] = paymentReqMatch[1].trim().toUpperCase();
+                        data['Amount'] = paymentReqMatch[2].trim();
+                    }
+
+                    // Try Amount Due as fallback (format: "Amount Due USD 3585.05" or "Amount Due: USD 3585.05")
+                    if (!data['Currency'] || !data['Amount']) {
+                        const amountDueMatch = pageText.match(/Amount Due[:\\s]*([A-Z]{3})\\s+([\\d,.]+)/i);
+                        if (amountDueMatch) {
+                            if (!data['Currency']) data['Currency'] = amountDueMatch[1].trim().toUpperCase();
+                            if (!data['Amount']) data['Amount'] = amountDueMatch[2].trim();
+                        }
+                    }
+
+                    // Fallback: Try "Currency:" label format
+                    if (!data['Currency']) {
+                        const currMatch = pageText.match(/Currency:\\s*\\n?\\s*([A-Z]{3})/i);
+                        if (currMatch) data['Currency'] = currMatch[1].trim().toUpperCase();
+                    }
+
+                    // Fallback: Try numeric-only amount patterns
                     if (!data['Amount']) {
-                        const altMatch = pageText.match(/Payment Request\\s*\\n?\\s*([\\d,.]+)/i);
-                        if (altMatch) data['Amount'] = altMatch[1].trim();
+                        const numAmountMatch = pageText.match(/Amount Due[:\\s]*([\\d,.]+)/i);
+                        if (numAmountMatch) data['Amount'] = numAmountMatch[1].trim();
+                    }
+                    if (!data['Amount']) {
+                        const numPayReqMatch = pageText.match(/Payment Request[:\\s]*([\\d,.]+)/i);
+                        if (numPayReqMatch) data['Amount'] = numPayReqMatch[1].trim();
                     }
 
                     // Attached Documents
