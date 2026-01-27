@@ -765,25 +765,43 @@ class OmneyBusinessAutomation:
             self.page.fill("input[placeholder*='Invoice Number'], input:near(:text('Invoice Number'))", invoice_number)
             print(f"  - Invoice Number: {invoice_number}")
 
-            # Set Invoice Date using JavaScript
-            self.page.evaluate(f"""
-                const dateInputs = document.querySelectorAll('input[type="date"]');
-                if (dateInputs[0]) {{
-                    dateInputs[0].value = '{invoice_date}';
-                    dateInputs[0].dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    dateInputs[0].dispatchEvent(new Event('change', {{ bubbles: true }}));
-                }}
+            # Set Invoice Date - use Playwright's native fill with proper React event handling
+            invoice_date_input = self.page.locator("input[type='date']").first
+            invoice_date_input.click()  # Focus the input
+            invoice_date_input.fill(invoice_date)  # Playwright's fill handles React state
+            # Dispatch additional events to ensure React state is updated
+            self.page.evaluate("""
+                () => {
+                    const dateInputs = document.querySelectorAll('input[type="date"]');
+                    if (dateInputs[0]) {
+                        // Trigger React's synthetic events
+                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                        nativeInputValueSetter.call(dateInputs[0], dateInputs[0].value);
+                        dateInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+                        dateInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+                        dateInputs[0].dispatchEvent(new Event('blur', { bubbles: true }));
+                    }
+                }
             """)
             print(f"  - Invoice Date: {invoice_date}")
 
-            # Set Due Date using JavaScript
-            self.page.evaluate(f"""
-                const dateInputs = document.querySelectorAll('input[type="date"]');
-                if (dateInputs[1]) {{
-                    dateInputs[1].value = '{due_date}';
-                    dateInputs[1].dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    dateInputs[1].dispatchEvent(new Event('change', {{ bubbles: true }}));
-                }}
+            # Set Due Date - use Playwright's native fill with proper React event handling
+            due_date_input = self.page.locator("input[type='date']").nth(1)
+            due_date_input.click()  # Focus the input
+            due_date_input.fill(due_date)  # Playwright's fill handles React state
+            # Dispatch additional events to ensure React state is updated
+            self.page.evaluate("""
+                () => {
+                    const dateInputs = document.querySelectorAll('input[type="date"]');
+                    if (dateInputs[1]) {
+                        // Trigger React's synthetic events
+                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                        nativeInputValueSetter.call(dateInputs[1], dateInputs[1].value);
+                        dateInputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+                        dateInputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+                        dateInputs[1].dispatchEvent(new Event('blur', { bubbles: true }));
+                    }
+                }
             """)
             print(f"  - Due Date: {due_date}")
 
@@ -1273,8 +1291,19 @@ class OmneyBusinessAutomation:
             self.page.wait_for_timeout(3000)
             self._take_screenshot("TC_03_After_Raise_Click_1")
 
-            # Check if still on form
-            if "/raise" in self.page.url:
+            # Check for success popup FIRST (popup appears as overlay, URL stays /raise)
+            quick_success_check = False
+            for selector in ["text=Request Id", "text=Invoice Sent Successfully", "text=successfully"]:
+                try:
+                    if self.page.locator(selector).first.is_visible(timeout=1000):
+                        quick_success_check = True
+                        print("    [DEBUG] Success popup detected after first click")
+                        break
+                except:
+                    continue
+
+            # Only retry if success popup NOT visible AND still on form
+            if not quick_success_check and "/raise" in self.page.url:
                 print("    [DEBUG] Still on form, trying Playwright click")
                 raise_btn = self.page.locator("button:has-text('Raise Invoice')").last
                 raise_btn.scroll_into_view_if_needed()
@@ -1287,14 +1316,24 @@ class OmneyBusinessAutomation:
                 print("    [WARNING] Session expired, attempting re-login")
                 raise Exception("Session expired during form submission")
 
-            # Check if still on form - try Enter on button
-            if "/raise" in self.page.url:
-                print("    [DEBUG] Trying focus + Enter on button")
-                raise_btn = self.page.locator("button:has-text('Raise Invoice')").last
-                raise_btn.focus()
-                self.page.keyboard.press("Enter")
-                self.page.wait_for_timeout(5000)
-                self._take_screenshot("TC_03_After_Raise_Click_3")
+            # Only retry if success popup NOT visible AND still on form
+            if not quick_success_check and "/raise" in self.page.url:
+                # Check again for success popup
+                for selector in ["text=Request Id", "text=Invoice Sent Successfully", "text=successfully"]:
+                    try:
+                        if self.page.locator(selector).first.is_visible(timeout=1000):
+                            quick_success_check = True
+                            break
+                    except:
+                        continue
+
+                if not quick_success_check:
+                    print("    [DEBUG] Trying focus + Enter on button")
+                    raise_btn = self.page.locator("button:has-text('Raise Invoice')").last
+                    raise_btn.focus()
+                    self.page.keyboard.press("Enter")
+                    self.page.wait_for_timeout(5000)
+                    self._take_screenshot("TC_03_After_Raise_Click_3")
 
             # Check again for login redirect
             if "/login" in self.page.url:
