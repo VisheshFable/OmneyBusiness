@@ -279,7 +279,9 @@ class OmneyBusinessAutomation:
                 'Currency': row_data['Currency'],
                 'Amount': row_data['Amount'],
                 'Your Receiving Account': row_data['Your Receiving Account'],
-                'Invoice Document': row_data['Invoice Document']
+                'Invoice Document': row_data['Invoice Document'],
+                'Description': row_data.get('Description', ''),
+                'Supporting Documents': row_data.get('Supporting Documents', '')
             }
 
             print(f"[INVOICE DATA] Using invoice: {invoice_reference}")
@@ -388,6 +390,32 @@ class OmneyBusinessAutomation:
         date_part = datetime.now().strftime("%Y%m%d")
         random_part = ''.join(random.choices(string.digits, k=4))
         return f"INV-{date_part}{random_part}"
+
+    def _generate_random_description(self) -> str:
+        """Generate a random description with numbers and special characters (max 45 chars)."""
+        # Short words for description
+        words = ["Inv", "Pay", "Svc", "Order", "Work", "Proj", "Goods", "Ref"]
+        # Special characters to include
+        special_chars = ["@", "#", "$", "&", "-", "_"]
+
+        # Build random description (shorter to fit 50 char limit)
+        num_words = random.randint(2, 3)
+        selected_words = random.sample(words, min(num_words, len(words)))
+
+        # Add random numbers
+        random_num = random.randint(100, 999)
+
+        # Add random special character
+        special = random.choice(special_chars)
+
+        # Combine into description (keep under 45 chars to be safe)
+        description = f"{' '.join(selected_words)} {special} #{random_num}"
+
+        # Ensure it doesn't exceed 45 characters
+        if len(description) > 45:
+            description = description[:45]
+
+        return description
 
     def _log_result(self, tc_id: str, scenario: str, status: str,
                     details: str = "", screenshot: str = ""):
@@ -740,6 +768,21 @@ class OmneyBusinessAutomation:
             bank_account = invoice_row_dict["Your Receiving Account"]
             document_path = invoice_row_dict["Invoice Document"]
 
+            # Get Description field (new field)
+            description_value = invoice_row_dict.get("Description", "")
+            if str(description_value).strip().lower().startswith("{random"):
+                # Generate random description with numbers and special characters
+                description = self._generate_random_description()
+            else:
+                description = str(description_value) if description_value and str(description_value).lower() != "nan" else ""
+
+            # Get Supporting Documents path (new field)
+            supporting_docs_path = invoice_row_dict.get("Supporting Documents", "")
+            if supporting_docs_path and str(supporting_docs_path).lower() != "nan":
+                supporting_docs_path = str(supporting_docs_path)
+            else:
+                supporting_docs_path = ""
+
             # Store invoice data for logging
             self.invoice_data = {
                 "invoice_number": invoice_number,
@@ -750,7 +793,9 @@ class OmneyBusinessAutomation:
                 "currency": currency,
                 "amount": amount,
                 "bank_account": bank_account,
-                "document": document_path
+                "document": document_path,
+                "description": description,
+                "supporting_documents": supporting_docs_path
             }
 
             # Step 1: Click on 'Raise Invoice' button
@@ -804,6 +849,28 @@ class OmneyBusinessAutomation:
                 }
             """)
             print(f"  - Due Date: {due_date}")
+
+            # Fill Description field (optional text field)
+            if description:
+                print("  - Filling Description...")
+                try:
+                    desc_textarea = self.page.locator("textarea[placeholder*='description'], textarea:near(:text('Description'))").first
+                    if desc_textarea.is_visible(timeout=2000):
+                        desc_textarea.fill(description)
+                        # Explicitly blur/tab out to ensure focus leaves the field
+                        desc_textarea.blur()
+                        self.page.wait_for_timeout(300)
+                        print(f"  - Description: {description}")
+                    else:
+                        # Try alternative selector
+                        desc_textarea = self.page.locator("textarea").first
+                        if desc_textarea.is_visible(timeout=1000):
+                            desc_textarea.fill(description)
+                            desc_textarea.blur()
+                            self.page.wait_for_timeout(300)
+                            print(f"  - Description: {description}")
+                except Exception as e:
+                    print(f"    [WARNING] Description field not filled: {str(e)[:50]}")
 
             # Select Client - try multiple approaches
             print("  - Selecting Client...")
@@ -1035,7 +1102,7 @@ class OmneyBusinessAutomation:
                 print(f"    [DEBUG] Selected Currency using keyboard: {currency}")
             print(f"  - Currency: {currency}")
 
-            # Fill Amount - try multiple selectors
+            # Fill Amount - try multiple selectors (click first to ensure focus)
             print("  - Filling Amount...")
             amount_selectors = [
                 "input[placeholder='Enter the amount']",
@@ -1047,7 +1114,11 @@ class OmneyBusinessAutomation:
                 try:
                     amount_input = self.page.locator(selector).first
                     if amount_input.is_visible(timeout=2000):
+                        # Click first to ensure focus, then clear and fill
+                        amount_input.click()
+                        self.page.wait_for_timeout(200)
                         amount_input.fill(amount)
+                        amount_input.blur()  # Blur after to trigger validation
                         amount_filled = True
                         print(f"    [DEBUG] Filled amount using: {selector}")
                         break
@@ -1158,6 +1229,27 @@ class OmneyBusinessAutomation:
 
             # Wait for upload to complete
             self.page.wait_for_timeout(2000)
+
+            # Upload Supporting Documents (optional)
+            if supporting_docs_path and Path(supporting_docs_path).exists():
+                print("  - Uploading Supporting Documents...")
+                try:
+                    # The second file input is for supporting documents
+                    file_inputs = self.page.locator("input[type='file']").all()
+                    if len(file_inputs) >= 2:
+                        file_inputs[1].set_input_files(supporting_docs_path)
+                        print(f"  - Supporting Documents: {supporting_docs_path}")
+                    else:
+                        # Try to find by nearby text
+                        supporting_input = self.page.locator("input[type='file']:near(:text('Supporting'))").first
+                        if supporting_input.is_visible(timeout=2000):
+                            supporting_input.set_input_files(supporting_docs_path)
+                            print(f"  - Supporting Documents: {supporting_docs_path}")
+                except Exception as e:
+                    print(f"    [WARNING] Supporting Documents upload failed: {str(e)[:50]}")
+                self.page.wait_for_timeout(1000)
+            elif supporting_docs_path:
+                print(f"    [WARNING] Supporting Documents file not found: {supporting_docs_path}")
 
             # Step 3: Capture ALL data from the form
             print("\n[STEP 3] Capturing all invoice data from form...")
@@ -1287,15 +1379,15 @@ class OmneyBusinessAutomation:
             except Exception as e:
                 print(f"    [DEBUG] Playwright click failed: {str(e)[:50]}")
 
-            # Wait for response
-            self.page.wait_for_timeout(3000)
+            # Wait for response (longer wait for file uploads)
+            self.page.wait_for_timeout(5000)
             self._take_screenshot("TC_03_After_Raise_Click_1")
 
             # Check for success popup FIRST (popup appears as overlay, URL stays /raise)
             quick_success_check = False
             for selector in ["text=Request Id", "text=Invoice Sent Successfully", "text=successfully"]:
                 try:
-                    if self.page.locator(selector).first.is_visible(timeout=1000):
+                    if self.page.locator(selector).first.is_visible(timeout=3000):
                         quick_success_check = True
                         print("    [DEBUG] Success popup detected after first click")
                         break
