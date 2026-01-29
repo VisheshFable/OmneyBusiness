@@ -60,6 +60,7 @@ class OmneyBusinessAutomation:
         self.test_results = []
         self.request_id = None
         self.invoice_data = {}
+        self.all_invoices = []  # Store all invoices created during test run
         self.tc04_verification_results = []  # TC_04 verification data
         self.tc04_captured_data = {}  # TC_04 captured invoice details
         self.tc05_verification_results = []  # TC_05 verification data
@@ -1483,6 +1484,16 @@ class OmneyBusinessAutomation:
             # Verify invoice appears in Pending Receivables
             invoice_in_list = self.page.locator(f"text={invoice_number}")
             expect(invoice_in_list).to_be_visible(timeout=5000)
+
+            # Store invoice in all_invoices list for report
+            invoice_record = {
+                "invoice_number": len(self.all_invoices) + 1,
+                "used_for": f"TC_0{6 + len(self.all_invoices)}" if len(self.all_invoices) < 3 else f"TC_{6 + len(self.all_invoices):02d}",
+                "request_id": self.request_id,
+                "data": self.invoice_data.copy()
+            }
+            self.all_invoices.append(invoice_record)
+            print(f"[INFO] Invoice #{invoice_record['invoice_number']} stored for {invoice_record['used_for']}")
 
             # Log success
             self._log_result(
@@ -3619,16 +3630,56 @@ class OmneyBusinessAutomation:
                         }
                     }
 
-                    // Purpose
+                    // ========== Purpose and Source of Funds Section ==========
+                    // Purpose - First try native select elements
                     for (const sel of allSelects) {
                         const selectedOpt = sel.options[sel.selectedIndex];
                         if (selectedOpt) {
                             const txt = selectedOpt.text || selectedOpt.value;
-                            if (txt && (txt.toLowerCase().includes('purpose') ||
-                                       txt.toLowerCase().includes('demo') ||
-                                       txt.toLowerCase().includes('payment'))) {
+                            if (txt && !txt.toLowerCase().includes('select') &&
+                               (txt.toLowerCase().includes('purpose') ||
+                                txt.toLowerCase().includes('demo') ||
+                                txt.toLowerCase().includes('maintenance') ||
+                                txt.toLowerCase().includes('payment') ||
+                                txt.toLowerCase().includes('family'))) {
                                 data['Purpose'] = txt;
                                 break;
+                            }
+                        }
+                    }
+
+                    // Second try: Look for custom dropdowns with "Purpose" label
+                    if (!data['Purpose']) {
+                        const labels = document.querySelectorAll('label');
+                        for (const label of labels) {
+                            if (label.textContent.toLowerCase().includes('purpose')) {
+                                // Find the associated input/div
+                                const container = label.closest('div');
+                                if (container) {
+                                    // Look for selected value in nearby divs
+                                    const valueDiv = container.querySelector('[class*="singleValue"], [class*="value"], input[value]');
+                                    if (valueDiv) {
+                                        const val = valueDiv.textContent || valueDiv.value;
+                                        if (val && !val.toLowerCase().includes('select')) {
+                                            data['Purpose'] = val.trim();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Third try: Look for elements with "Purpose" nearby text
+                    if (!data['Purpose']) {
+                        const purposeTexts = document.evaluate(
+                            "\/\/text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'purpose')]\/following::div[1]",
+                            document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                        ).singleNodeValue;
+                        if (purposeTexts) {
+                            const val = purposeTexts.textContent.trim();
+                            if (val && !val.toLowerCase().includes('select') && val.length < 50) {
+                                data['Purpose'] = val;
                             }
                         }
                     }
@@ -3816,6 +3867,7 @@ class OmneyBusinessAutomation:
             # Clear previous test data to ensure clean state
             self.invoice_data = {}
             self.request_id = None
+            self.all_invoices = []  # Reset invoice list for this test flow
             self.tc04_verification_results = []
             self.tc04_captured_data = {}
             self.tc05_verification_results = []
@@ -4030,6 +4082,7 @@ class OmneyBusinessAutomation:
             # Clear previous test data to ensure clean state
             self.invoice_data = {}
             self.request_id = None
+            self.all_invoices = []  # Reset invoice list for this test flow
             self.tc04_verification_results = []
             self.tc04_captured_data = {}
             self.tc05_verification_results = []
@@ -4244,6 +4297,7 @@ class OmneyBusinessAutomation:
             # Clear previous test data to ensure clean state
             self.invoice_data = {}
             self.request_id = None
+            self.all_invoices = []  # Reset invoice list for this test flow
             self.tc04_verification_results = []
             self.tc04_captured_data = {}
             self.tc05_verification_results = []
@@ -4490,9 +4544,27 @@ class OmneyBusinessAutomation:
                 </div>
             </div>'''
 
-        # Generate invoice data HTML if available
+        # Generate invoice data HTML if available (show all invoices created)
         invoice_html = ""
-        if self.invoice_data:
+        if self.all_invoices:
+            # Show all invoices created during the test run
+            invoice_html = '<h2 class="section-title">All Invoices Created (TC_03)</h2>'
+            for idx, invoice_record in enumerate(self.all_invoices):
+                invoice_rows = ""
+                for key, value in invoice_record['data'].items():
+                    invoice_rows += f"<tr><td>{key}</td><td>{value}</td></tr>"
+                invoice_rows += f"<tr><td>Request ID</td><td><strong>{invoice_record['request_id']}</strong></td></tr>"
+
+                invoice_html += f'''
+                <div style="margin-bottom: 30px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #667eea;">
+                    <h3 style="margin-bottom: 15px; color: #1a1a2e;">Invoice #{invoice_record['invoice_number']} <span style="color: #6c757d; font-size: 0.9rem;">(Used for {invoice_record['used_for']})</span></h3>
+                    <table class="data-table">
+                        <tr><th>Field</th><th>Value</th></tr>
+                        {invoice_rows}
+                    </table>
+                </div>'''
+        elif self.invoice_data:
+            # Fallback to single invoice display (backward compatibility)
             invoice_rows = ""
             for key, value in self.invoice_data.items():
                 invoice_rows += f"<tr><td>{key}</td><td>{value}</td></tr>"
