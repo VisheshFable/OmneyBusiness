@@ -24,6 +24,7 @@ Usage:
 import os
 import sys
 import io
+import json
 import random
 import string
 from datetime import datetime, timedelta
@@ -1063,84 +1064,7 @@ class OmneyBusinessAutomation:
 
             print(f"  - Purpose: {purpose}")
 
-            # Select Currency - try multiple approaches
-            print("  - Selecting Currency...")
-            currency_selectors = [
-                "text=Select Currency",
-                "[placeholder='Select Currency']",
-                "div:has-text('Select Currency')",
-            ]
-            for selector in currency_selectors:
-                try:
-                    dropdown = self.page.locator(selector).first
-                    if dropdown.is_visible(timeout=2000):
-                        dropdown.click()
-                        print(f"    [DEBUG] Clicked currency dropdown using: {selector}")
-                        break
-                except:
-                    continue
-
-            self.page.wait_for_timeout(500)
-            currency_selected = False
-            try:
-                # First try: exact text match
-                self.page.get_by_text(currency, exact=True).first.click(timeout=2000)
-                currency_selected = True
-                print(f"    [DEBUG] Selected Currency using exact match: {currency}")
-            except:
-                try:
-                    # Second try: using role=option
-                    self.page.get_by_role("option", name=currency).first.click(timeout=2000)
-                    currency_selected = True
-                    print(f"    [DEBUG] Selected Currency using role=option: {currency}")
-                except:
-                    pass
-
-            if not currency_selected:
-                # Fallback: type currency code and Enter
-                self.page.keyboard.type(currency)
-                self.page.keyboard.press("Enter")
-                print(f"    [DEBUG] Selected Currency using keyboard: {currency}")
-            print(f"  - Currency: {currency}")
-
-            # Fill Amount - try multiple selectors (click first to ensure focus)
-            print("  - Filling Amount...")
-            amount_selectors = [
-                "input[placeholder='Enter the amount']",
-                "input[placeholder*='amount']",
-                "input:near(:text('Amount'))",
-            ]
-            amount_filled = False
-            for selector in amount_selectors:
-                try:
-                    amount_input = self.page.locator(selector).first
-                    if amount_input.is_visible(timeout=2000):
-                        # Click first to ensure focus, then clear and fill
-                        amount_input.click()
-                        self.page.wait_for_timeout(200)
-                        amount_input.fill(amount)
-                        amount_input.blur()  # Blur after to trigger validation
-                        amount_filled = True
-                        print(f"    [DEBUG] Filled amount using: {selector}")
-                        break
-                except:
-                    continue
-
-            if not amount_filled:
-                # Try finding by label
-                self.page.evaluate(f"""
-                    const inputs = document.querySelectorAll('input');
-                    for (let input of inputs) {{
-                        if (input.placeholder && input.placeholder.toLowerCase().includes('amount')) {{
-                            input.value = '{amount}';
-                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            break;
-                        }}
-                    }}
-                """)
-            print(f"  - Amount: {amount}")
-
-            # Select Receiving Account
+            # Select Receiving Account FIRST (required before Currency/Amount per application change)
             print("  - Selecting Receiving Account...")
 
             # Scroll down to ensure receiving account is visible
@@ -1208,6 +1132,83 @@ class OmneyBusinessAutomation:
             self.page.wait_for_timeout(500)
             self._take_screenshot("TC_03_After_Account_Selection")
             print(f"  - Receiving Account: {bank_account} (attempted)")
+
+            # Select Currency - AFTER Receiving Account (per application requirement)
+            print("  - Selecting Currency...")
+            currency_selectors = [
+                "text=Select Currency",
+                "[placeholder='Select Currency']",
+                "div:has-text('Select Currency')",
+            ]
+            for selector in currency_selectors:
+                try:
+                    dropdown = self.page.locator(selector).first
+                    if dropdown.is_visible(timeout=2000):
+                        dropdown.click()
+                        print(f"    [DEBUG] Clicked currency dropdown using: {selector}")
+                        break
+                except:
+                    continue
+
+            self.page.wait_for_timeout(500)
+            currency_selected = False
+            try:
+                # First try: exact text match
+                self.page.get_by_text(currency, exact=True).first.click(timeout=2000)
+                currency_selected = True
+                print(f"    [DEBUG] Selected Currency using exact match: {currency}")
+            except:
+                try:
+                    # Second try: using role=option
+                    self.page.get_by_role("option", name=currency).first.click(timeout=2000)
+                    currency_selected = True
+                    print(f"    [DEBUG] Selected Currency using role=option: {currency}")
+                except:
+                    pass
+
+            if not currency_selected:
+                # Fallback: type currency code and Enter
+                self.page.keyboard.type(currency)
+                self.page.keyboard.press("Enter")
+                print(f"    [DEBUG] Selected Currency using keyboard: {currency}")
+            print(f"  - Currency: {currency}")
+
+            # Fill Amount - AFTER Receiving Account and Currency (per application requirement)
+            print("  - Filling Amount...")
+            amount_selectors = [
+                "input[placeholder='Enter the amount']",
+                "input[placeholder*='amount']",
+                "input:near(:text('Amount'))",
+            ]
+            amount_filled = False
+            for selector in amount_selectors:
+                try:
+                    amount_input = self.page.locator(selector).first
+                    if amount_input.is_visible(timeout=2000):
+                        # Click first to ensure focus, then clear and fill
+                        amount_input.click()
+                        self.page.wait_for_timeout(200)
+                        amount_input.fill(amount)
+                        amount_input.blur()  # Blur after to trigger validation
+                        amount_filled = True
+                        print(f"    [DEBUG] Filled amount using: {selector}")
+                        break
+                except:
+                    continue
+
+            if not amount_filled:
+                # Try finding by label
+                self.page.evaluate(f"""
+                    const inputs = document.querySelectorAll('input');
+                    for (let input of inputs) {{
+                        if (input.placeholder && input.placeholder.toLowerCase().includes('amount')) {{
+                            input.value = '{amount}';
+                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            break;
+                        }}
+                    }}
+                """)
+            print(f"  - Amount: {amount}")
 
             # Upload Invoice Document
             print("  - Uploading Document...")
@@ -4487,6 +4488,73 @@ class OmneyBusinessAutomation:
     # =========================================================================
     # Report Generation
     # =========================================================================
+    def save_results_to_json(self, json_prefix: str = "Test_Results") -> Path:
+        """Save all test results to a JSON file for data persistence and analysis.
+
+        Args:
+            json_prefix: Prefix for the JSON filename (default: "Test_Results")
+
+        Returns:
+            Path to the saved JSON file
+        """
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        json_path = self.reports_dir / f"{json_prefix}_{timestamp}.json"
+
+        # Compile all test data into a single dictionary
+        results_data = {
+            "metadata": {
+                "execution_timestamp": datetime.now().isoformat(),
+                "base_url": self.base_url,
+                "headless_mode": self.headless,
+                "python_version": sys.version.split()[0],
+                "framework": "Playwright Python"
+            },
+            "summary": {
+                "total_tests": len(self.test_results),
+                "passed": sum(1 for r in self.test_results if r["status"] == "PASSED"),
+                "failed": sum(1 for r in self.test_results if r["status"] == "FAILED"),
+                "pass_rate": (sum(1 for r in self.test_results if r["status"] == "PASSED") / len(self.test_results) * 100) if self.test_results else 0
+            },
+            "test_results": self.test_results,
+            "invoice_data": {
+                "current_invoice": self.invoice_data,
+                "request_id": self.request_id,
+                "all_invoices": self.all_invoices
+            },
+            "verification_results": {
+                "tc04": {
+                    "verification": self.tc04_verification_results,
+                    "captured_data": self.tc04_captured_data
+                },
+                "tc05": {
+                    "verification": self.tc05_verification_results,
+                    "captured_data": self.tc05_captured_data
+                },
+                "tc06": {
+                    "verification": self.tc06_verification_results,
+                    "form_data": self.tc06_form_data,
+                    "transaction_data": self.tc06_transaction_data
+                },
+                "tc07": {
+                    "verification": self.tc07_verification_results,
+                    "form_data": self.tc07_form_data,
+                    "transaction_data": self.tc07_transaction_data
+                },
+                "tc08": {
+                    "verification": self.tc08_verification_results,
+                    "form_data": self.tc08_form_data,
+                    "transaction_data": self.tc08_transaction_data
+                }
+            }
+        }
+
+        # Save to JSON file
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(results_data, f, indent=2, default=str)
+
+        print(f"[JSON] Results saved to: {json_path}")
+        return json_path
+
     def generate_report(self, report_prefix: str = "Test_Report", test_results_subset: list = None):
         """Generate test execution report in HTML format.
 
@@ -4494,6 +4562,10 @@ class OmneyBusinessAutomation:
             report_prefix: Prefix for the report filename (default: "Test_Report")
             test_results_subset: Specific test results to include (default: self.test_results)
         """
+        # Save results to JSON first for data persistence
+        json_prefix = report_prefix.replace("_Report", "_Results")
+        json_path = self.save_results_to_json(json_prefix)
+
         report_path = self.reports_dir / f"{report_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
 
         # Use provided subset or default to all test results
@@ -4982,7 +5054,8 @@ class OmneyBusinessAutomation:
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_content)
 
-        print(f"\n[REPORT] Generated: {report_path}")
+        print(f"\n[REPORT] HTML Report: {report_path}")
+        print(f"[REPORT] JSON Data: {json_path}")
         return report_path
 
     # =========================================================================
