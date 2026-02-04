@@ -1,0 +1,14 @@
+{
+  "environment": {
+    "base_url": "https://oneob.remit.in",
+    "name": "PROD"
+  },
+  "browser": {
+    "headless": true,
+    "slow_mo": 200
+  },
+  "timeouts": {
+    "dashboard_load": 20000,
+    "page_navigation": 10000
+  }
+}

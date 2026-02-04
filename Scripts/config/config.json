@@ -1,0 +1,53 @@
+{
+  "environment": {
+    "base_url": "https://qaoneob.remit.in",
+    "name": "QA"
+  },
+  "browser": {
+    "headless": true,
+    "slow_mo": 500,
+    "args": [
+      "--start-maximized",
+      "--disable-infobars",
+      "--no-first-run"
+    ],
+    "no_viewport": true
+  },
+  "timeouts": {
+    "element_visibility": 3000,
+    "page_navigation": 15000,
+    "dashboard_load": 45000,
+    "login_redirect": 10000,
+    "dropdown_open": 1500,
+    "popup_wait": 5000,
+    "invoice_list": 10000,
+    "short_delay": 500,
+    "medium_delay": 1000,
+    "long_delay": 2000,
+    "extra_long_delay": 3000,
+    "max_delay": 5000
+  },
+  "paths": {
+    "reports_dir": "Reports/Python_Automation",
+    "testcase_file": "Testcase/OB_Automation.xlsx",
+    "shared_invoice_data": "Reports/tc07_invoice_data.json",
+    "tc06_reports": "Reports/TC_06_Standalone",
+    "tc07_reports": "Reports/TC_07_Standalone",
+    "tc08_reports": "Reports/TC_08_Standalone"
+  },
+  "url_patterns": {
+    "login": "**/login",
+    "dashboard": "**/dashboard",
+    "receivable_details": "**/receivable-details",
+    "payable_details": "**/payable-details"
+  },
+  "defaults": {
+    "country": "India",
+    "currency": "INR",
+    "screenshot_format": "png"
+  },
+  "retry": {
+    "max_attempts": 3,
+    "dropdown_retry_delay": 2000
+  }
+}

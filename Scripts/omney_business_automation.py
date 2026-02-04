@@ -19,6 +19,8 @@ Requirements:
 
 Usage:
     python omney_business_automation.py
+    python omney_business_automation.py --env uat
+    python omney_business_automation.py --env prod
 """
 
 import os
@@ -27,6 +29,7 @@ import io
 import json
 import random
 import string
+import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
 import pandas as pd
@@ -38,24 +41,87 @@ if sys.platform == 'win32':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 
+def load_config(env: str = "qa") -> dict:
+    """
+    Load configuration from JSON files.
+
+    Args:
+        env: Environment name (qa, uat, prod)
+
+    Returns:
+        Merged configuration dictionary
+    """
+    config_dir = Path(__file__).parent / "config"
+
+    # Load main config
+    config_file = config_dir / "config.json"
+    if not config_file.exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_file}")
+
+    with open(config_file, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+
+    # Load environment-specific overrides
+    env_file = config_dir / f"config.{env}.json"
+    if env_file.exists():
+        with open(env_file, 'r', encoding='utf-8') as f:
+            env_config = json.load(f)
+        # Deep merge environment config
+        for key, value in env_config.items():
+            if isinstance(value, dict) and key in config:
+                config[key].update(value)
+            else:
+                config[key] = value
+        print(f"[CONFIG] Loaded {env.upper()} environment configuration")
+
+    return config
+
+
+def load_selectors() -> dict:
+    """
+    Load UI selectors from JSON file.
+
+    Returns:
+        Selectors dictionary
+    """
+    selectors_file = Path(__file__).parent / "config" / "selectors.json"
+    if not selectors_file.exists():
+        raise FileNotFoundError(f"Selectors file not found: {selectors_file}")
+
+    with open(selectors_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
 class OmneyBusinessAutomation:
     """Automation class for Omney Business application testing."""
 
-    def __init__(self, headless: bool = False, keep_browser_open: bool = False):
+    def __init__(self, headless: bool = None, keep_browser_open: bool = False, env: str = "qa"):
         """
         Initialize the automation framework.
 
         Args:
-            headless: Run browser in headless mode (default: False)
+            headless: Run browser in headless mode (default: from config)
             keep_browser_open: Keep browser open after test completion (default: False)
+            env: Environment to use (qa, uat, prod) - default: qa
         """
-        self.base_url = "https://qaoneob.remit.in"
-        self.headless = headless
+        # Load configuration
+        self.config = load_config(env)
+        self.selectors = load_selectors()
+
+        # Environment settings
+        self.base_url = self.config["environment"]["base_url"]
+        self.env_name = self.config["environment"]["name"]
+
+        # Browser settings (config can be overridden by parameter)
+        self.headless = headless if headless is not None else self.config["browser"]["headless"]
         self.keep_browser_open = keep_browser_open
         self.browser = None
         self.page = None
         self.context = None
         self.playwright = None
+
+        # Timeouts from config
+        self.timeouts = self.config["timeouts"]
 
         # Test results storage
         self.test_results = []
@@ -76,10 +142,10 @@ class OmneyBusinessAutomation:
         self.tc08_form_data = {}  # TC_08 captured Pay Invoice form data
         self.tc08_transaction_data = {}  # TC_08 transaction success data
 
-        # Setup directories
+        # Setup directories from config
         self.base_dir = Path(__file__).parent.parent
-        self.reports_dir = self.base_dir / "Reports" / "Python_Automation"
-        self.testcase_file = self.base_dir / "Testcase" / "OB_Automation.xlsx"
+        self.reports_dir = self.base_dir / self.config["paths"]["reports_dir"]
+        self.testcase_file = self.base_dir / self.config["paths"]["testcase_file"]
 
         # Create reports directory
         self.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -89,28 +155,36 @@ class OmneyBusinessAutomation:
         self.invoice_sheet = None
         self.credentials_sheet = None
 
+        print(f"[CONFIG] Environment: {self.env_name}")
+        print(f"[CONFIG] Base URL: {self.base_url}")
+
     def setup(self):
         """Setup browser and page."""
         self.playwright = sync_playwright().start()
 
+        # Get browser settings from config
+        browser_config = self.config["browser"]
+
         # Launch browser in fullscreen/maximized mode
         self.browser = self.playwright.chromium.launch(
             headless=self.headless,
-            slow_mo=500,  # Slow down actions for visibility
-            args=[
+            slow_mo=browser_config.get("slow_mo", 500),
+            args=browser_config.get("args", [
                 "--start-maximized",
                 "--disable-infobars",
                 "--no-first-run"
-            ]
+            ])
         )
-        # Use no_viewport=True to allow the browser to use its full window size
-        self.context = self.browser.new_context(no_viewport=True)
+        # Use no_viewport setting from config
+        self.context = self.browser.new_context(
+            no_viewport=browser_config.get("no_viewport", True)
+        )
         self.page = self.context.new_page()
 
         # Load test data from Excel
         self._load_test_data()
 
-        print(f"[SETUP] Browser initialized successfully")
+        print(f"[SETUP] Browser initialized successfully (headless={self.headless}, slow_mo={browser_config.get('slow_mo', 500)})")
         print(f"[SETUP] Reports will be saved to: {self.reports_dir}")
 
     def teardown(self):
@@ -133,6 +207,65 @@ class OmneyBusinessAutomation:
         if self.playwright:
             self.playwright.stop()
         print("[TEARDOWN] Browser closed successfully")
+
+    def _get_timeout(self, timeout_name: str, default: int = 5000) -> int:
+        """
+        Get timeout value from config.
+
+        Args:
+            timeout_name: Name of the timeout (e.g., 'element_visibility', 'page_navigation')
+            default: Default value if timeout not found in config
+
+        Returns:
+            Timeout value in milliseconds
+        """
+        return self.timeouts.get(timeout_name, default)
+
+    def _get_selector(self, category: str, element: str, index: int = 0) -> str:
+        """
+        Get selector from config.
+
+        Args:
+            category: Selector category (e.g., 'login', 'invoice_form')
+            element: Element name within category
+            index: Index if selector is a list (default: 0 for first)
+
+        Returns:
+            Selector string
+        """
+        try:
+            selector = self.selectors.get(category, {}).get(element, None)
+            if selector is None:
+                return None
+            if isinstance(selector, list):
+                return selector[index] if index < len(selector) else selector[0]
+            if isinstance(selector, dict):
+                # For nested selectors like dropdown.trigger
+                return None
+            return selector
+        except Exception:
+            return None
+
+    def _get_selectors_list(self, category: str, element: str) -> list:
+        """
+        Get list of selectors from config for fallback iteration.
+
+        Args:
+            category: Selector category (e.g., 'login', 'invoice_form')
+            element: Element name within category
+
+        Returns:
+            List of selector strings
+        """
+        try:
+            selector = self.selectors.get(category, {}).get(element, [])
+            if isinstance(selector, list):
+                return selector
+            if isinstance(selector, str):
+                return [selector]
+            return []
+        except Exception:
+            return []
 
     def _load_test_data(self):
         """Load test data from Excel file."""
@@ -478,7 +611,7 @@ class OmneyBusinessAutomation:
             for selector in possible_selectors:
                 try:
                     element = self.page.locator(selector).first
-                    if element.is_visible(timeout=3000):
+                    if element.is_visible(timeout=self._get_timeout("element_visibility", 3000)):
                         page_loaded = True
                         print(f"[INFO] Found element with selector: {selector}")
                         break
@@ -543,7 +676,7 @@ class OmneyBusinessAutomation:
             for selector in login_link_selectors:
                 try:
                     login_link = self.page.locator(selector).first
-                    if login_link.is_visible(timeout=2000):
+                    if login_link.is_visible(timeout=self._get_timeout("element_visibility", 2000)):
                         login_link.click()
                         login_clicked = True
                         print(f"[INFO] Clicked login using selector: {selector}")
@@ -557,12 +690,12 @@ class OmneyBusinessAutomation:
                 print("[INFO] Trying direct navigation to login page")
                 self.page.goto(f"{self.base_url}/login")
 
-            self.page.wait_for_url("**/login", timeout=15000)
+            self.page.wait_for_url(self.config["url_patterns"]["login"], timeout=self._get_timeout("page_navigation", 15000))
             print("[STEP] Navigated to login page")
 
             # Wait for login form to load
             self.page.wait_for_load_state("networkidle")
-            self.page.wait_for_timeout(1000)
+            self.page.wait_for_timeout(self._get_timeout("medium_delay", 1000))
 
             # Step 1: Enter valid Username - try multiple selectors
             email_selectors = [
@@ -576,7 +709,7 @@ class OmneyBusinessAutomation:
             for selector in email_selectors:
                 try:
                     email_input = self.page.locator(selector).first
-                    if email_input.is_visible(timeout=2000):
+                    if email_input.is_visible(timeout=self._get_timeout("element_visibility", 2000)):
                         break
                 except:
                     continue
@@ -672,7 +805,7 @@ class OmneyBusinessAutomation:
 
             # Wait for dashboard to load (with longer timeout for slow connections)
             try:
-                self.page.wait_for_url("**/dashboard", timeout=45000)
+                self.page.wait_for_url(self.config["url_patterns"]["dashboard"], timeout=self._get_timeout("dashboard_load", 45000))
             except:
                 # Check current URL
                 current_url = self.page.url
@@ -692,7 +825,7 @@ class OmneyBusinessAutomation:
             for selector in success_selectors:
                 try:
                     element = self.page.locator(selector).first
-                    if element.is_visible(timeout=3000):
+                    if element.is_visible(timeout=self._get_timeout("element_visibility", 3000)):
                         login_success = True
                         print(f"[INFO] Login verified with: {selector}")
                         break
@@ -1387,7 +1520,7 @@ class OmneyBusinessAutomation:
 
             # Check for success popup FIRST (popup appears as overlay, URL stays /raise)
             quick_success_check = False
-            for selector in ["text=Request Id", "text=Invoice Sent Successfully", "text=successfully"]:
+            for selector in ["text=Invoice Sent Successfully", "text=Request Id", "text=successfully"]:
                 try:
                     if self.page.locator(selector).first.is_visible(timeout=3000):
                         quick_success_check = True
@@ -1413,7 +1546,7 @@ class OmneyBusinessAutomation:
             # Only retry if success popup NOT visible AND still on form
             if not quick_success_check and "/raise" in self.page.url:
                 # Check again for success popup
-                for selector in ["text=Request Id", "text=Invoice Sent Successfully", "text=successfully"]:
+                for selector in ["text=Invoice Sent Successfully", "text=Request Id", "text=successfully"]:
                     try:
                         if self.page.locator(selector).first.is_visible(timeout=1000):
                             quick_success_check = True
@@ -1437,6 +1570,7 @@ class OmneyBusinessAutomation:
 
             # Wait for success popup with various selectors
             success_selectors = [
+                "text=Invoice Sent Successfully",
                 "text=Request Id",
                 "text=Request ID",
                 "text=Success",
@@ -1464,27 +1598,77 @@ class OmneyBusinessAutomation:
             # Take screenshot of success popup
             screenshot_success = self._take_screenshot("TC_03_Invoice_Success_Popup", full_page=False)
 
-            # Step 5 & 6: Get Request ID
-            request_id_element = self.page.locator("text=Request Id").locator("xpath=following-sibling::*[1]")
-            self.request_id = request_id_element.inner_text()
+            # Step 5 & 6: Try to get Request ID from popup (old format) or skip (new format)
+            self.request_id = None
+            try:
+                request_id_element = self.page.locator("text=Request Id").locator("xpath=following-sibling::*[1]")
+                if request_id_element.is_visible(timeout=2000):
+                    self.request_id = request_id_element.inner_text()
+                    print(f"\n[STEP 5 & 6] Request ID (from popup): {self.request_id}")
+                    # Click Copy Request ID (old popup)
+                    try:
+                        self.page.click("button:has-text('Copy Request ID')", timeout=2000)
+                    except:
+                        pass
+            except:
+                print("[STEP 5 & 6] New popup format - Request ID not shown in popup")
 
-            # Click Copy Request ID
-            self.page.click("button:has-text('Copy Request ID')")
-            print(f"\n[STEP 5 & 6] Request ID: {self.request_id}")
+            # Click Copy Link if available (new popup format)
+            try:
+                copy_link_btn = self.page.locator("button:has-text('Copy Link')").first
+                if copy_link_btn.is_visible(timeout=1000):
+                    copy_link_btn.click()
+                    print("[STEP 5] Clicked 'Copy Link' button")
+            except:
+                pass
 
             # Step 7: Click Close button
             self.page.click("button:has-text('Close')")
             print("[STEP 7] Clicked 'Close' button")
 
             # Wait for dashboard
-            self.page.wait_for_url("**/dashboard", timeout=10000)
+            self.page.wait_for_url(self.config["url_patterns"]["dashboard"], timeout=self._get_timeout("login_redirect", 10000))
 
             # Take screenshot of dashboard with new invoice
             screenshot_dashboard = self._take_screenshot("TC_03_Dashboard_After_Invoice")
 
             # Verify invoice appears in Pending Receivables
             invoice_in_list = self.page.locator(f"text={invoice_number}")
-            expect(invoice_in_list).to_be_visible(timeout=5000)
+            expect(invoice_in_list).to_be_visible(timeout=self._get_timeout("popup_wait", 5000))
+
+            # If Request ID was not captured from popup, try to extract from dashboard table
+            if not self.request_id:
+                try:
+                    # Try to extract request_id from the table row containing the invoice number
+                    request_id_from_table = self.page.evaluate(f"""
+                        () => {{
+                            const rows = document.querySelectorAll('tr');
+                            for (const row of rows) {{
+                                if (row.textContent.includes('{invoice_number}')) {{
+                                    // Request ID is typically in one of the first columns
+                                    const cells = row.querySelectorAll('td');
+                                    for (const cell of cells) {{
+                                        const text = cell.textContent.trim();
+                                        // Request IDs are typically alphanumeric strings (10 chars)
+                                        if (text && /^[A-Za-z0-9]{{8,12}}$/.test(text)) {{
+                                            return text;
+                                        }}
+                                    }}
+                                }}
+                            }}
+                            return null;
+                        }}
+                    """)
+                    if request_id_from_table:
+                        self.request_id = request_id_from_table
+                        print(f"[STEP 6] Request ID (from table): {self.request_id}")
+                    else:
+                        # Use invoice number as fallback identifier
+                        self.request_id = invoice_number
+                        print(f"[STEP 6] Request ID not found, using Invoice Number: {self.request_id}")
+                except Exception as e:
+                    self.request_id = invoice_number
+                    print(f"[STEP 6] Could not extract Request ID: {e}, using Invoice Number")
 
             # Store invoice in all_invoices list for report
             invoice_record = {
@@ -1532,12 +1716,12 @@ class OmneyBusinessAutomation:
 
         try:
             # Ensure we have data from TC_03
-            if not self.request_id or not self.invoice_data:
-                raise Exception("TC_04 requires TC_03 to be executed first (Request ID and Invoice data needed)")
+            if not self.invoice_data:
+                raise Exception("TC_04 requires TC_03 to be executed first (Invoice data needed)")
 
             invoice_number = self.invoice_data.get("Invoice Number", "")
             print(f"[INFO] Looking for Invoice: {invoice_number}")
-            print(f"[INFO] Request ID: {self.request_id}")
+            print(f"[INFO] Request ID: {self.request_id or 'N/A'}")
 
             # Step 1: Find invoice in Pending Receivables
             print("\n[STEP 1] Finding invoice in Pending Receivables...")
@@ -3674,7 +3858,7 @@ class OmneyBusinessAutomation:
                     // Third try: Look for elements with "Purpose" nearby text
                     if (!data['Purpose']) {
                         const purposeTexts = document.evaluate(
-                            "\/\/text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'purpose')]\/following::div[1]",
+                            "//text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'purpose')]/following::div[1]",
                             document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
                         ).singleNodeValue;
                         if (purposeTexts) {
@@ -5431,16 +5615,40 @@ class OmneyBusinessAutomation:
 
 def main():
     """Main entry point."""
-    import sys
-    import json
 
-    # Check for command line arguments
-    if len(sys.argv) > 1 and sys.argv[1] == "--tc03-only":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Omney Business Test Automation")
+    parser.add_argument("--env", choices=["qa", "uat", "prod"], default="qa",
+                        help="Environment to run tests against (default: qa)")
+    parser.add_argument("--headless", action="store_true", default=None,
+                        help="Run browser in headless mode")
+    parser.add_argument("--no-headless", action="store_true",
+                        help="Run browser with visible UI")
+    parser.add_argument("--tc03-only", action="store_true",
+                        help="Run only TC_01, TC_02, TC_03 for preparation")
+    parser.add_argument("--tc09", action="store_true",
+                        help="Run only TC_09 (Individual client flow)")
+    parser.add_argument("--tc10", action="store_true",
+                        help="Run only TC_10 (Business vendor flow)")
+    parser.add_argument("--tc11", action="store_true",
+                        help="Run only TC_11 (Business vendor + Individual client flow)")
+
+    args = parser.parse_args()
+
+    # Determine headless mode
+    headless = None
+    if args.headless:
+        headless = True
+    elif args.no_headless:
+        headless = False
+
+    if args.tc03_only:
         # Run only TC_01, TC_02, TC_03 for TC_07 preparation
         print("\n" + "="*70)
         print("RUNNING TC_01, TC_02, TC_03 ONLY (For TC_07 Preparation)")
         print("="*70)
-        automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
+        automation = OmneyBusinessAutomation(headless=headless if headless is not None else False,
+                                             keep_browser_open=False, env=args.env)
         automation.setup()
 
         tc01_result = automation.tc_01_url_verification()
@@ -5465,13 +5673,14 @@ def main():
                     print("="*70)
 
         automation.teardown()
-    elif len(sys.argv) > 1 and sys.argv[1] == "--tc09":
+    elif args.tc09:
         # Run only TC_09 (complete flow with Individual client)
         print("\n" + "="*70)
         print("RUNNING TC_09 ONLY")
         print("Complete invoice creation and payment flow with Individual client")
         print("="*70)
-        automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
+        automation = OmneyBusinessAutomation(headless=headless if headless is not None else False,
+                                             keep_browser_open=False, env=args.env)
         try:
             automation.setup()
             automation._load_test_data()
@@ -5483,13 +5692,14 @@ def main():
             automation.generate_report(report_prefix="TC_09_Report")
         finally:
             automation.teardown()
-    elif len(sys.argv) > 1 and sys.argv[1] == "--tc10":
+    elif args.tc10:
         # Run only TC_10 (complete flow with Business vendor)
         print("\n" + "="*70)
         print("RUNNING TC_10 ONLY")
         print("Complete invoice creation and payment flow with Business vendor")
         print("="*70)
-        automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
+        automation = OmneyBusinessAutomation(headless=headless if headless is not None else False,
+                                             keep_browser_open=False, env=args.env)
         try:
             automation.setup()
             automation._load_test_data()
@@ -5501,13 +5711,14 @@ def main():
             automation.generate_report(report_prefix="TC_10_Report")
         finally:
             automation.teardown()
-    elif len(sys.argv) > 1 and sys.argv[1] == "--tc11":
+    elif args.tc11:
         # Run only TC_11 (complete flow with Business vendor and Individual client)
         print("\n" + "="*70)
         print("RUNNING TC_11 ONLY")
         print("Complete invoice creation and payment flow with Business vendor and Individual client")
         print("="*70)
-        automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
+        automation = OmneyBusinessAutomation(headless=headless if headless is not None else False,
+                                             keep_browser_open=False, env=args.env)
         try:
             automation.setup()
             automation._load_test_data()
@@ -5520,8 +5731,8 @@ def main():
         finally:
             automation.teardown()
     else:
-        # Run all test cases
-        automation = OmneyBusinessAutomation(headless=False, keep_browser_open=False)
+        # Run all test cases - use config headless setting if not specified
+        automation = OmneyBusinessAutomation(headless=headless, keep_browser_open=False, env=args.env)
         automation.run_all_tests()
 
 

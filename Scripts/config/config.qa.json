@@ -1,0 +1,14 @@
+{
+  "environment": {
+    "base_url": "https://qaoneob.remit.in",
+    "name": "QA"
+  },
+  "browser": {
+    "headless": true,
+    "slow_mo": 500
+  },
+  "timeouts": {
+    "dashboard_load": 45000,
+    "page_navigation": 15000
+  }
+}

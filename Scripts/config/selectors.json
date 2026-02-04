@@ -1,0 +1,161 @@
+{
+  "login": {
+    "login_link": [
+      "a:has-text('Login')",
+      "button:has-text('Login')",
+      "a[href*='login']",
+      "text=Login"
+    ],
+    "email_input": [
+      "input[type='email']",
+      "input[type='text']",
+      "input[name='email']",
+      "input[placeholder*='email' i]"
+    ],
+    "password_input": "input[type='password']",
+    "login_button": [
+      "button:has-text('Log in')",
+      "button:has-text('Login')",
+      "button[type='submit']"
+    ],
+    "logout_button": [
+      "button:has-text('Log out')",
+      "button:has-text('Logout')"
+    ]
+  },
+  "navigation": {
+    "dashboard_elements": [
+      "text=Dashboard",
+      "text=Pending Receivables",
+      "text=Pending Payables",
+      "[class*='dashboard']"
+    ],
+    "view_all_button": "button:has-text('View all')",
+    "menu_toggle": "button[aria-label='menu'], button:has-text('Menu')"
+  },
+  "invoice_form": {
+    "invoice_number": [
+      "input[placeholder*='Invoice Number' i]",
+      "input[name*='invoice' i]"
+    ],
+    "date_input": "input[type='date']",
+    "description_textarea": [
+      "textarea[placeholder*='description' i]",
+      "textarea:near(:text('Description'))",
+      "textarea"
+    ],
+    "client_dropdown": {
+      "trigger": [
+        "text=Choose a client",
+        "[placeholder*='client' i]",
+        "div:has-text('Choose a client')"
+      ],
+      "options_container": "[role='listbox']",
+      "option": "[role='option']"
+    },
+    "purpose_dropdown": {
+      "trigger": [
+        "text=Select Purpose",
+        "[placeholder*='purpose' i]"
+      ],
+      "options_container": "[role='listbox']",
+      "option": "[role='option']"
+    },
+    "account_dropdown": {
+      "trigger": "text=Select account to receive funds",
+      "options_container": "[role='listbox']",
+      "option": "[role='option']"
+    },
+    "currency_dropdown": {
+      "trigger": [
+        "text=Select currency",
+        "[placeholder*='currency' i]"
+      ],
+      "options_container": "[role='listbox']",
+      "option": "[role='option']"
+    },
+    "amount_input": [
+      "input[placeholder*='Amount' i]",
+      "input[type='number']",
+      "input[name*='amount' i]"
+    ],
+    "file_input": "input[type='file']",
+    "raise_invoice_button": "button:has-text('Raise Invoice')"
+  },
+  "invoice_list": {
+    "table_row": "tr",
+    "eye_icon": [
+      "svg.lucide-eye",
+      "svg[class*='eye']",
+      "[data-testid='view-icon']"
+    ],
+    "request_id_element": "text=Request Id"
+  },
+  "invoice_details": {
+    "approve_button": [
+      "button:has-text('Approve')",
+      "button:has-text('APPROVE')"
+    ],
+    "pay_button": [
+      "button:has-text('Pay')",
+      "button:has-text('PAY')"
+    ],
+    "pay_now_button": [
+      "button:has-text('Pay Now')",
+      "button:has-text('PAY NOW')"
+    ],
+    "reject_button": [
+      "button:has-text('Reject')",
+      "button:has-text('REJECT')"
+    ]
+  },
+  "pay_invoice_page": {
+    "choose_invoice_dropdown": {
+      "trigger": [
+        "text=Choose an invoice",
+        "[placeholder*='invoice' i]"
+      ],
+      "options_container": "[role='listbox']",
+      "option": "[role='option']"
+    },
+    "submit_button": [
+      "button:has-text('Submit')",
+      "button:has-text('Pay')",
+      "button[type='submit']"
+    ]
+  },
+  "popups": {
+    "success_popup": [
+      "text=successfully",
+      "text=Success",
+      "[class*='success']",
+      "[role='alert']:has-text('success')"
+    ],
+    "error_popup": [
+      "text=error",
+      "text=failed",
+      "[class*='error']",
+      "[role='alert']:has-text('error')"
+    ],
+    "transaction_success": [
+      "text=Transaction Successful",
+      "text=Payment Successful",
+      "text=successfully"
+    ],
+    "close_button": [
+      "button:has-text('Close')",
+      "button:has-text('OK')",
+      "[aria-label='close']"
+    ]
+  },
+  "data_extraction": {
+    "invoice_number_label": "Invoice Number",
+    "bank_name_label": "Bank Name",
+    "account_number_label": "Account Number",
+    "currency_label": "Currency",
+    "amount_label": "Amount",
+    "purpose_label": "Purpose",
+    "routing_number_label": "Routing Number",
+    "booking_id_label": "Booking ID"
+  }
+}

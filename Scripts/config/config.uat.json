@@ -1,0 +1,14 @@
+{
+  "environment": {
+    "base_url": "https://uatoneob.remit.in",
+    "name": "UAT"
+  },
+  "browser": {
+    "headless": true,
+    "slow_mo": 300
+  },
+  "timeouts": {
+    "dashboard_load": 30000,
+    "page_navigation": 10000
+  }
+}
