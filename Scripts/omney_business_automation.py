@@ -2922,12 +2922,12 @@ class OmneyBusinessAutomation:
 
             # Step 8: Wait for and capture success popup
             print("\n[STEP 8] Waiting for transaction success popup...")
-            self.page.wait_for_timeout(5000)
+            self.page.wait_for_timeout(10000)
 
             success_found = False
             for selector in ["text=Transaction Successful", "text=Booking ID", "text=booked Successfully"]:
                 try:
-                    if self.page.locator(selector).first.is_visible(timeout=10000):
+                    if self.page.locator(selector).first.is_visible(timeout=30000):
                         success_found = True
                         break
                 except:
@@ -3377,12 +3377,12 @@ class OmneyBusinessAutomation:
 
             # Step 7: Wait for and capture success popup
             print("\n[STEP 7] Waiting for transaction success popup...")
-            self.page.wait_for_timeout(5000)
+            self.page.wait_for_timeout(10000)
 
             success_found = False
             for selector in ["text=Transaction Successful", "text=Booking ID", "text=booked Successfully"]:
                 try:
-                    if self.page.locator(selector).first.is_visible(timeout=10000):
+                    if self.page.locator(selector).first.is_visible(timeout=30000):
                         success_found = True
                         break
                 except:
@@ -3943,12 +3943,12 @@ class OmneyBusinessAutomation:
 
             # Step 7: Wait for and capture success popup
             print("\n[STEP 7] Waiting for transaction success popup...")
-            self.page.wait_for_timeout(5000)
+            self.page.wait_for_timeout(10000)
 
             success_found = False
             for selector in ["text=Transaction Successful", "text=Booking ID", "text=booked Successfully"]:
                 try:
-                    if self.page.locator(selector).first.is_visible(timeout=10000):
+                    if self.page.locator(selector).first.is_visible(timeout=30000):
                         success_found = True
                         break
                 except:
