@@ -4933,6 +4933,206 @@ class OmneyBusinessAutomation:
             print(f"[TC_12] FAILED: {str(e)}")
             return False
 
+    def tc_13_check_pending_invoice_raised(self) -> bool:
+        """
+        TC_13: To check Pending Invoice Raised
+
+        This test case verifies that after creating an invoice, the "Pending Invoices Raised"
+        count on the dashboard increases by 1.
+
+        Flow:
+        1. Note down the current "Pending Invoices Raised" count from dashboard
+        2. Create a new invoice (reuses TC_03 flow)
+        3. Navigate back to dashboard
+        4. Verify "Pending Invoices Raised" count has increased by 1
+
+        Expected: After an invoice has been created, the Pending Invoice Raised count should increase by 1
+        """
+        tc_id = "TC_13"
+        scenario = "To check Pending Invoice Raised"
+        print(f"\n{'='*70}")
+        print(f"[EXECUTING] {tc_id}: {scenario}")
+        print(f"{'='*70}")
+        print(f"[INFO] This test verifies invoice count increases after creation:")
+        print(f"       - Vendor: Vendor_Individual")
+        print(f"       - Action: Check count before and after invoice creation")
+        print(f"{'='*70}")
+
+        try:
+            # Clear previous test data to ensure clean state
+            self.invoice_data = {}
+            self.request_id = None
+            self.all_invoices = []
+
+            # TC_13 Step 1-2: URL verification and Login as Vendor_Individual
+            print(f"\n[TC_13] Step 1-2: Executing TC_01 and TC_02 (URL verification and login)...")
+            tc01_result = self.tc_01_url_verification()
+            if not tc01_result:
+                raise Exception("TC_01 failed - Cannot proceed with TC_13")
+
+            # Execute TC_02 to login (TC_02 uses Vendor_Individual credentials)
+            tc02_result = self.tc_02_login()
+            if not tc02_result:
+                raise Exception("TC_02 failed - Login unsuccessful")
+
+            print(f"[TC_13] Successfully logged in as Vendor_Individual via TC_02")
+
+            screenshot = self._take_screenshot("TC_13_01_Dashboard_Before")
+            print(f"[TC_13] Screenshot captured: Dashboard before invoice creation")
+
+            # TC_13 Step 3: Capture the current "Pending Invoices Raised" count
+            print(f"\n[TC_13] Step 3: Capturing current 'Pending Invoices Raised' count...")
+
+            # Try multiple selectors to find the count
+            initial_count = None
+            count_selectors = [
+                "h3:near(:text('Pending Invoices Raised'))",
+                "text='Pending Invoices Raised' >> xpath=following-sibling::h3",
+                "div:has-text('Pending Invoices Raised') h3",
+            ]
+
+            for selector in count_selectors:
+                try:
+                    count_element = self.page.locator(selector).first
+                    if count_element.is_visible(timeout=2000):
+                        count_text = count_element.inner_text().strip()
+                        initial_count = int(count_text)
+                        print(f"[TC_13] Current 'Pending Invoices Raised' count: {initial_count}")
+                        break
+                except Exception as e:
+                    continue
+
+            if initial_count is None:
+                # Fallback: try to extract from page content using JavaScript
+                initial_count = self.page.evaluate(r"""
+                    () => {
+                        const headings = document.querySelectorAll('h3');
+                        for (let h of headings) {
+                            const text = h.innerText.trim();
+                            // Find the h3 that contains only a number and is near "Pending Invoices Raised" text
+                            if (/^\d+$/.test(text)) {
+                                const parent = h.closest('div');
+                                if (parent && parent.innerText.includes('Pending Invoices Raised')) {
+                                    return parseInt(text);
+                                }
+                            }
+                        }
+                        return null;
+                    }
+                """)
+
+                if initial_count is not None:
+                    print(f"[TC_13] Found count using JavaScript: {initial_count}")
+                else:
+                    raise Exception("Could not locate 'Pending Invoices Raised' count on dashboard")
+
+            # TC_13 Step 4: Create a new invoice using TC_03 flow
+            print(f"\n[TC_13] Step 4: Creating new invoice using TC_03 flow...")
+            tc03_result = self.tc_03_raise_invoice(context_tc_id="TC_13")
+
+            if not tc03_result:
+                raise Exception("Failed to create invoice - TC_03 flow failed")
+
+            print(f"[TC_13] Invoice created successfully: {self.invoice_data.get('invoice_number', 'N/A')}")
+
+            # TC_13 Step 5: Navigate back to dashboard
+            print(f"\n[TC_13] Step 5: Navigating back to dashboard...")
+
+            # Check if still logged in (TC_03 should leave us at dashboard)
+            if "/dashboard" not in self.page.url:
+                print(f"[TC_13] Not on dashboard, navigating...")
+                self.page.goto(f"{self.base_url}/dashboard")
+                self.page.wait_for_load_state("networkidle")
+                self.page.wait_for_timeout(2000)
+
+            # Check if we got redirected to login (session expired)
+            if "/login" in self.page.url:
+                print(f"[TC_13] Session expired, re-logging in...")
+                # Re-login using TC_02
+                tc02_result = self.tc_02_login()
+                if not tc02_result:
+                    raise Exception("Re-login failed after invoice creation")
+                print(f"[TC_13] Successfully re-logged in")
+
+            # Ensure we're on the dashboard
+            if "/dashboard" not in self.page.url:
+                self.page.goto(f"{self.base_url}/dashboard")
+                self.page.wait_for_load_state("networkidle")
+                self.page.wait_for_timeout(2000)
+
+            screenshot = self._take_screenshot("TC_13_02_Dashboard_After")
+            print(f"[TC_13] Screenshot captured: Dashboard after invoice creation")
+
+            # TC_13 Step 6: Capture the new "Pending Invoices Raised" count
+            print(f"\n[TC_13] Step 6: Capturing new 'Pending Invoices Raised' count...")
+
+            new_count = None
+            for selector in count_selectors:
+                try:
+                    count_element = self.page.locator(selector).first
+                    if count_element.is_visible(timeout=2000):
+                        count_text = count_element.inner_text().strip()
+                        new_count = int(count_text)
+                        print(f"[TC_13] New 'Pending Invoices Raised' count: {new_count}")
+                        break
+                except:
+                    continue
+
+            if new_count is None:
+                # Fallback: try to extract from page content using JavaScript
+                new_count = self.page.evaluate(r"""
+                    () => {
+                        const headings = document.querySelectorAll('h3');
+                        for (let h of headings) {
+                            const text = h.innerText.trim();
+                            if (/^\d+$/.test(text)) {
+                                const parent = h.closest('div');
+                                if (parent && parent.innerText.includes('Pending Invoices Raised')) {
+                                    return parseInt(text);
+                                }
+                            }
+                        }
+                        return null;
+                    }
+                """)
+
+                if new_count is not None:
+                    print(f"[TC_13] Found new count using JavaScript: {new_count}")
+                else:
+                    raise Exception("Could not locate 'Pending Invoices Raised' count after invoice creation")
+
+            # TC_13 Step 7: Verify count increased by 1
+            print(f"\n[TC_13] Step 7: Verifying count increase...")
+            print(f"[TC_13] Initial count: {initial_count}")
+            print(f"[TC_13] New count: {new_count}")
+            print(f"[TC_13] Difference: {new_count - initial_count}")
+
+            if new_count == initial_count + 1:
+                result_message = (
+                    f"PASSED: Pending Invoices Raised count increased from {initial_count} to {new_count} "
+                    f"(+1 as expected). Invoice created: {self.invoice_data.get('invoice_number', 'N/A')}"
+                )
+                self._log_result(
+                    tc_id,
+                    scenario,
+                    "PASSED",
+                    result_message,
+                    screenshot
+                )
+                print(f"[TC_13] {result_message}")
+                return True
+            else:
+                raise Exception(
+                    f"Count verification failed: Expected {initial_count + 1}, but got {new_count}. "
+                    f"Difference: {new_count - initial_count} (expected: 1)"
+                )
+
+        except Exception as e:
+            screenshot = self._take_screenshot("TC_13_FAILED")
+            self._log_result(tc_id, scenario, "FAILED", str(e), screenshot)
+            print(f"[TC_13] FAILED: {str(e)}")
+            return False
+
     # =========================================================================
     # Report Generation
     # =========================================================================
@@ -5933,6 +6133,8 @@ def main():
                         help="Run only TC_11 (Business vendor + Individual client flow)")
     parser.add_argument("--tc12", action="store_true",
                         help="Run only TC_12 (Reject invoice flow)")
+    parser.add_argument("--tc13", action="store_true",
+                        help="Run only TC_13 (Check Pending Invoice Raised count)")
 
     args = parser.parse_args()
 
@@ -6048,6 +6250,25 @@ def main():
                 print("TC_12 COMPLETED SUCCESSFULLY!")
                 print("="*70)
             automation.generate_report(report_prefix="TC_12_Report")
+        finally:
+            automation.teardown()
+    elif args.tc13:
+        # Run only TC_13 (check pending invoice raised count)
+        print("\n" + "="*70)
+        print("RUNNING TC_13 ONLY")
+        print("Check Pending Invoice Raised count increases after invoice creation")
+        print("="*70)
+        automation = OmneyBusinessAutomation(headless=headless if headless is not None else False,
+                                             keep_browser_open=False, env=args.env)
+        try:
+            automation.setup()
+            automation._load_test_data()
+            tc13_result = automation.tc_13_check_pending_invoice_raised()
+            if tc13_result:
+                print("\n" + "="*70)
+                print("TC_13 COMPLETED SUCCESSFULLY!")
+                print("="*70)
+            automation.generate_report(report_prefix="TC_13_Report")
         finally:
             automation.teardown()
     else:
