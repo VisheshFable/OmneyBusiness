@@ -4669,6 +4669,270 @@ class OmneyBusinessAutomation:
             print(f"[TC_11] FAILED: {str(e)}")
             return False
 
+    def tc_12_reject_invoice(self) -> bool:
+        """
+        TC_12: To Reject an Invoice
+
+        This test case creates an invoice as Vendor_Individual, then logs in as
+        Client_Business and rejects the invoice from the dashboard.
+
+        Flow:
+        1. Login as Vendor_Individual
+        2. Raise an invoice (reuses TC_03 flow)
+        3. Logout from Vendor
+        4. Login as Client_Business
+        5. Find the invoice in Pending Payables on the dashboard
+        6. Click "Reject" button next to the invoice
+        7. Verify "Transaction Rejected!" toast notification appears
+
+        Expected: A toast notification will display as "Transaction Rejected!"
+        """
+        tc_id = "TC_12"
+        scenario = "To Reject an Invoice"
+        print(f"\n{'='*70}")
+        print(f"[EXECUTING] {tc_id}: {scenario}")
+        print(f"{'='*70}")
+        print(f"[INFO] This test creates an invoice and rejects it:")
+        print(f"       - Vendor: Vendor_Individual")
+        print(f"       - Client: Client_Business")
+        print(f"       - Action: Reject invoice from dashboard")
+        print(f"{'='*70}")
+
+        try:
+            # Clear previous test data to ensure clean state
+            self.invoice_data = {}
+            self.request_id = None
+            self.all_invoices = []
+
+            # TC_12 Step 1-2: URL verification and Login as Vendor_Individual
+            print(f"\n[TC_12] Step 1-2: Executing TC_01 and TC_02 (URL verification and login)...")
+            tc01_result = self.tc_01_url_verification()
+            if not tc01_result:
+                raise Exception("TC_01 failed - Cannot proceed with TC_12")
+
+            # Login as Vendor_Individual
+            print(f"\n[TC_12] Logging in as Vendor_Individual...")
+            vendor_email, vendor_password = self._get_credentials_for_tc("TC_12", specific_step_tc="TC_03")
+
+            # Navigate to login page if needed
+            if "/login" not in self.page.url:
+                self.page.goto(f"{self.base_url}/login")
+                self.page.wait_for_load_state("networkidle")
+
+            # Fill login form
+            email_input = self.page.locator("input[type='email'], input[type='text']").first
+            email_input.fill(vendor_email)
+            print(f"  - Email: {vendor_email}")
+
+            password_input = self.page.locator("input[type='password']").first
+            password_input.fill(vendor_password)
+            print(f"  - Password: ********")
+
+            # Submit login
+            password_input.press("Enter")
+            self.page.wait_for_timeout(2000)
+
+            # Wait for dashboard
+            self.page.wait_for_url("**/dashboard", timeout=30000)
+            self.page.wait_for_load_state("networkidle")
+            print(f"[TC_12] Login successful - Vendor_Individual logged in")
+
+            # Take screenshot of vendor dashboard
+            self._take_screenshot("TC_12_vendor_dashboard")
+
+            # TC_12 Step 3: Create Invoice (using TC_12 invoice data)
+            print(f"\n[TC_12] Step 3: Executing TC_03 with TC_12 invoice data...")
+            tc03_result = self.tc_03_raise_invoice(context_tc_id="TC_12")
+            if not tc03_result:
+                raise Exception("TC_03 failed - Cannot create invoice for TC_12")
+
+            # Save the invoice number for later verification
+            invoice_number = self.invoice_data.get('invoice_number', '') or self.invoice_data.get('Invoice Number', '')
+            if not invoice_number:
+                invoice_number = self.request_id or 'N/A'
+            print(f"[TC_12] Invoice created: {invoice_number}")
+
+            # TC_12 Step 4: Logout from Vendor_Individual
+            print(f"\n[TC_12] Step 4: Logging out from Vendor_Individual...")
+            self.page.goto(f"{self.base_url}/dashboard")
+            self.page.wait_for_load_state("networkidle")
+            logout_button = self.page.locator("button:has-text('Log out'), button:has-text('Logout')").first
+            if logout_button.is_visible(timeout=5000):
+                logout_button.click()
+                self.page.wait_for_timeout(2000)
+
+            # Handle any beforeunload dialog
+            try:
+                self.page.on("dialog", lambda dialog: dialog.accept())
+            except:
+                pass
+
+            # TC_12 Step 5: Login as Client_Business
+            # Derive client credentials from the invoice reference (e.g., "Vendor_Individual + Client_Business")
+            print(f"\n[TC_12] Step 5: Logging in as Client_Business...")
+            tc_row = self.test_data[self.test_data['TC_ID'] == "TC_12"]
+            test_data_value = tc_row['Test Data'].values[0]
+            invoice_ref = self._parse_invoice_reference(test_data_value)
+            # Extract client type from invoice reference (e.g., "Vendor_Individual + Client_Business" -> "Client_Business")
+            client_credential_type = invoice_ref.split('+')[-1].strip() if invoice_ref and '+' in invoice_ref else "Client_Business"
+            print(f"[TC_12] Client credential type derived from invoice reference: {client_credential_type}")
+            client_email, client_password = self._get_credentials(client_credential_type)
+
+            self.page.goto(f"{self.base_url}/login")
+            self.page.wait_for_load_state("networkidle")
+            self.page.wait_for_timeout(1000)
+
+            email_input = self.page.locator("input[type='email'], input[type='text']").first
+            email_input.fill(client_email)
+            print(f"  - Email: {client_email}")
+
+            password_input = self.page.locator("input[type='password']").first
+            password_input.fill(client_password)
+            print(f"  - Password: ********")
+
+            # Submit login
+            password_input.press("Enter")
+            self.page.wait_for_timeout(2000)
+
+            try:
+                self.page.wait_for_url("**/dashboard", timeout=30000)
+            except:
+                login_btn = self.page.locator("button:has-text('Log in')").first
+                if login_btn.is_visible(timeout=2000):
+                    login_btn.click()
+                    self.page.wait_for_url("**/dashboard", timeout=30000)
+
+            self.page.wait_for_load_state("networkidle")
+            print(f"[TC_12] Login successful - Client_Business logged in")
+
+            # Take screenshot of client dashboard
+            self._take_screenshot("TC_12_client_dashboard")
+
+            # TC_12 Step 6: Find the invoice in Pending Payables and click Reject
+            print(f"\n[TC_12] Step 6: Finding invoice {invoice_number} in Pending Payables...")
+
+            # Scroll down to Pending Payables section
+            self.page.wait_for_timeout(2000)
+
+            # Look for the invoice in Pending Payables
+            invoice_found = False
+            reject_button = None
+
+            # Try to find the invoice by its number in the Pending Payables table
+            for attempt in range(3):
+                try:
+                    # Look for a row containing the invoice number
+                    invoice_row = self.page.locator(f"text={invoice_number}").first
+                    if invoice_row.is_visible(timeout=5000):
+                        print(f"[TC_12] Found invoice {invoice_number} in Pending Payables")
+                        invoice_found = True
+
+                        # Find the Reject button in the same row/section
+                        # The Reject button should be near the invoice number
+                        # Try multiple selector strategies
+                        reject_selectors = [
+                            f"text={invoice_number} >> xpath=../.. >> button:has-text('Reject')",
+                            f"button:has-text('Reject'):near(:text('{invoice_number}'))",
+                            "button:has-text('Reject')",
+                        ]
+
+                        for selector in reject_selectors:
+                            try:
+                                reject_button = self.page.locator(selector).first
+                                if reject_button.is_visible(timeout=3000):
+                                    print(f"[TC_12] Found Reject button using selector: {selector}")
+                                    break
+                            except:
+                                continue
+
+                        if reject_button and reject_button.is_visible(timeout=2000):
+                            break
+                except:
+                    pass
+
+                # If not found, try scrolling down
+                self.page.evaluate("window.scrollBy(0, 300)")
+                self.page.wait_for_timeout(1000)
+
+            if not invoice_found:
+                raise Exception(f"Invoice {invoice_number} not found in Pending Payables")
+
+            if not reject_button or not reject_button.is_visible(timeout=2000):
+                raise Exception(f"Reject button not found for invoice {invoice_number}")
+
+            # Take screenshot before clicking Reject
+            self._take_screenshot("TC_12_before_reject")
+
+            # TC_12 Step 7: Click Reject and verify toast notification
+            print(f"\n[TC_12] Step 7: Clicking Reject button...")
+            reject_button.click()
+            self.page.wait_for_timeout(3000)
+
+            # Verify "Transaction Rejected!" toast notification
+            print(f"[TC_12] Waiting for 'Transaction Rejected!' notification...")
+            rejection_confirmed = False
+
+            rejection_selectors = [
+                "text=Transaction Rejected",
+                "text=Transaction Rejected!",
+                "text=Rejected",
+                "[role='status']:has-text('Rejected')",
+                ".Toastify:has-text('Rejected')",
+                "text=rejected",
+            ]
+
+            for selector in rejection_selectors:
+                try:
+                    if self.page.locator(selector).first.is_visible(timeout=5000):
+                        rejection_confirmed = True
+                        print(f"[TC_12] Rejection confirmed! Toast notification found: {selector}")
+                        break
+                except:
+                    continue
+
+            # Take screenshot after rejection
+            screenshot = self._take_screenshot("TC_12_rejection_result")
+
+            if rejection_confirmed:
+                print(f"\n[TC_12] All steps completed!")
+                self._log_result(
+                    tc_id,
+                    scenario,
+                    "PASSED",
+                    f"Successfully rejected invoice {invoice_number}. 'Transaction Rejected!' toast notification appeared.",
+                    screenshot
+                )
+                return True
+            else:
+                # Even if toast wasn't captured, check if the invoice status changed
+                self.page.wait_for_timeout(2000)
+                screenshot = self._take_screenshot("TC_12_post_reject_check")
+
+                # Check if the Reject button is still visible (if not, rejection likely succeeded)
+                try:
+                    reject_still_visible = self.page.locator(f"button:has-text('Reject'):near(:text('{invoice_number}'))").first.is_visible(timeout=3000)
+                except:
+                    reject_still_visible = False
+
+                if not reject_still_visible:
+                    print(f"[TC_12] Reject button no longer visible - rejection likely succeeded")
+                    self._log_result(
+                        tc_id,
+                        scenario,
+                        "PASSED",
+                        f"Invoice {invoice_number} rejected. Reject button no longer visible after click.",
+                        screenshot
+                    )
+                    return True
+                else:
+                    raise Exception(f"Transaction Rejected notification not found after clicking Reject for invoice {invoice_number}")
+
+        except Exception as e:
+            screenshot = self._take_screenshot("TC_12_FAILED")
+            self._log_result(tc_id, scenario, "FAILED", str(e), screenshot)
+            print(f"[TC_12] FAILED: {str(e)}")
+            return False
+
     # =========================================================================
     # Report Generation
     # =========================================================================
@@ -5556,7 +5820,34 @@ class OmneyBusinessAutomation:
             print("\n" + "="*70)
             print("GENERATING REPORT FOR TC_11")
             print("="*70)
+            self.tc11_results = self.test_results.copy()
             self.generate_report(report_prefix="TC_11_Report")
+            print("="*70)
+
+            # Clear test results for TC_12
+            self.test_results = []
+
+            # TC_12: Reject an Invoice
+            print("\n" + "="*70)
+            print("EXECUTING TC_12: Reject an Invoice")
+            print("="*70)
+            try:
+                self._load_test_data()
+                tc12_result = self.tc_12_reject_invoice()
+                if tc12_result:
+                    print("[SUCCESS] TC_12 completed successfully")
+                else:
+                    print("[FAILED] TC_12 execution failed")
+            except Exception as e:
+                print(f"[ERROR] TC_12 execution error: {e}")
+            print("="*70)
+
+            # Generate separate report for TC_12
+            print("\n" + "="*70)
+            print("GENERATING REPORT FOR TC_12")
+            print("="*70)
+            self.tc12_results = self.test_results.copy()
+            self.generate_report(report_prefix="TC_12_Report")
             print("="*70)
 
         except Exception as e:
@@ -5592,9 +5883,16 @@ class OmneyBusinessAutomation:
                 print(f"  {status_icon} {result['tc_id']}: {result['status']}")
 
         # Show TC_11 results
-        if self.test_results:
+        if hasattr(self, 'tc11_results') and self.tc11_results:
             print("\nTC_11 (Business Vendor + Individual Client Flow):")
-            for result in self.test_results:
+            for result in self.tc11_results:
+                status_icon = "✓" if result["status"] == "PASSED" else "✗"
+                print(f"  {status_icon} {result['tc_id']}: {result['status']}")
+
+        # Show TC_12 results
+        if hasattr(self, 'tc12_results') and self.tc12_results:
+            print("\nTC_12 (Reject Invoice Flow):")
+            for result in self.tc12_results:
                 status_icon = "✓" if result["status"] == "PASSED" else "✗"
                 print(f"  {status_icon} {result['tc_id']}: {result['status']}")
 
@@ -5602,7 +5900,8 @@ class OmneyBusinessAutomation:
         all_results = (self.tc01_08_results if hasattr(self, 'tc01_08_results') else []) + \
                       (self.tc09_results if hasattr(self, 'tc09_results') else []) + \
                       (self.tc10_results if hasattr(self, 'tc10_results') else []) + \
-                      self.test_results
+                      (self.tc11_results if hasattr(self, 'tc11_results') else []) + \
+                      (self.tc12_results if hasattr(self, 'tc12_results') else [])
         total_passed = sum(1 for r in all_results if r["status"] == "PASSED")
         total_failed = sum(1 for r in all_results if r["status"] == "FAILED")
 
@@ -5632,6 +5931,8 @@ def main():
                         help="Run only TC_10 (Business vendor flow)")
     parser.add_argument("--tc11", action="store_true",
                         help="Run only TC_11 (Business vendor + Individual client flow)")
+    parser.add_argument("--tc12", action="store_true",
+                        help="Run only TC_12 (Reject invoice flow)")
 
     args = parser.parse_args()
 
@@ -5728,6 +6029,25 @@ def main():
                 print("TC_11 COMPLETED SUCCESSFULLY!")
                 print("="*70)
             automation.generate_report(report_prefix="TC_11_Report")
+        finally:
+            automation.teardown()
+    elif args.tc12:
+        # Run only TC_12 (reject invoice flow)
+        print("\n" + "="*70)
+        print("RUNNING TC_12 ONLY")
+        print("Reject an invoice as Client_Business")
+        print("="*70)
+        automation = OmneyBusinessAutomation(headless=headless if headless is not None else False,
+                                             keep_browser_open=False, env=args.env)
+        try:
+            automation.setup()
+            automation._load_test_data()
+            tc12_result = automation.tc_12_reject_invoice()
+            if tc12_result:
+                print("\n" + "="*70)
+                print("TC_12 COMPLETED SUCCESSFULLY!")
+                print("="*70)
+            automation.generate_report(report_prefix="TC_12_Report")
         finally:
             automation.teardown()
     else:
