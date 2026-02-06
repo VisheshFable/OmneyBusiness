@@ -4703,6 +4703,20 @@ class OmneyBusinessAutomation:
             self.invoice_data = {}
             self.request_id = None
             self.all_invoices = []
+            # Clear verification results from previous test flows (TC_09/TC_10/TC_11)
+            self.tc04_verification_results = []
+            self.tc04_captured_data = {}
+            self.tc05_verification_results = []
+            self.tc05_captured_data = {}
+            self.tc06_verification_results = []
+            self.tc06_form_data = {}
+            self.tc06_transaction_data = {}
+            self.tc07_verification_results = []
+            self.tc07_form_data = {}
+            self.tc07_transaction_data = {}
+            self.tc08_verification_results = []
+            self.tc08_form_data = {}
+            self.tc08_transaction_data = {}
 
             # TC_12 Step 1-2: URL verification and Login as Vendor_Individual
             print(f"\n[TC_12] Step 1-2: Executing TC_01 and TC_02 (URL verification and login)...")
@@ -4963,6 +4977,20 @@ class OmneyBusinessAutomation:
             self.invoice_data = {}
             self.request_id = None
             self.all_invoices = []
+            # Clear verification results from previous test flows (TC_09/TC_10/TC_11/TC_12)
+            self.tc04_verification_results = []
+            self.tc04_captured_data = {}
+            self.tc05_verification_results = []
+            self.tc05_captured_data = {}
+            self.tc06_verification_results = []
+            self.tc06_form_data = {}
+            self.tc06_transaction_data = {}
+            self.tc07_verification_results = []
+            self.tc07_form_data = {}
+            self.tc07_transaction_data = {}
+            self.tc08_verification_results = []
+            self.tc08_form_data = {}
+            self.tc08_transaction_data = {}
 
             # TC_13 Step 1-2: URL verification and Login as Vendor_Individual
             print(f"\n[TC_13] Step 1-2: Executing TC_01 and TC_02 (URL verification and login)...")
@@ -5131,6 +5159,397 @@ class OmneyBusinessAutomation:
             screenshot = self._take_screenshot("TC_13_FAILED")
             self._log_result(tc_id, scenario, "FAILED", str(e), screenshot)
             print(f"[TC_13] FAILED: {str(e)}")
+            return False
+
+    def tc_14_check_outstanding_invoices(self) -> bool:
+        """
+        TC_14: To check Outstanding Invoices
+
+        This test case verifies that after creating an invoice, the "Outstanding invoices"
+        count on the CLIENT's dashboard increases by 1.
+
+        Flow:
+        1. Login as Client_Business and capture current "Outstanding invoices" count
+        2. Logout and login as Vendor_Individual
+        3. Create a new invoice (reuses TC_03 flow)
+        4. Logout and login as Client_Business again
+        5. Verify "Outstanding invoices" count has increased by 1
+        6. Click on the Outstanding Invoices section
+        7. Verify the newly created invoice is present in the list
+
+        Expected:
+        1. After an invoice has been created, the Outstanding Invoices count should be increased in the Client login
+        2. Inside the Outstanding Invoices, the newly created Invoice should be available
+        """
+        tc_id = "TC_14"
+        scenario = "To check Outstanding Invoices"
+        print(f"\n{'='*70}")
+        print(f"[EXECUTING] {tc_id}: {scenario}")
+        print(f"{'='*70}")
+        print(f"[INFO] This test verifies Outstanding invoices count increases after invoice creation:")
+        print(f"       - Client: Client_Business")
+        print(f"       - Vendor: Vendor_Individual")
+        print(f"       - Action: Check count before and after invoice creation")
+        print(f"{'='*70}")
+
+        try:
+            # Clear previous test data to ensure clean state
+            self.invoice_data = {}
+            self.request_id = None
+            self.all_invoices = []
+            # Clear verification results from previous test flows (TC_09/TC_10/TC_11/TC_12/TC_13)
+            self.tc04_verification_results = []
+            self.tc04_captured_data = {}
+            self.tc05_verification_results = []
+            self.tc05_captured_data = {}
+            self.tc06_verification_results = []
+            self.tc06_form_data = {}
+            self.tc06_transaction_data = {}
+            self.tc07_verification_results = []
+            self.tc07_form_data = {}
+            self.tc07_transaction_data = {}
+            self.tc08_verification_results = []
+            self.tc08_form_data = {}
+            self.tc08_transaction_data = {}
+
+            # Collect all TC_14 screenshots
+            tc14_screenshots = []
+
+            # TC_14 Step 1: URL verification and Login as Client_Business FIRST
+            print(f"\n[TC_14] Step 1: Executing TC_01 (URL verification)...")
+            tc01_result = self.tc_01_url_verification()
+            if not tc01_result:
+                raise Exception("TC_01 failed - Cannot proceed with TC_14")
+
+            # TC_14 Step 2: Login as Client_Business to capture initial count
+            print(f"\n[TC_14] Step 2: Logging in as Client_Business to capture initial Outstanding invoices count...")
+
+            # Derive client credentials from the invoice reference (e.g., "Vendor_Individual + Client_Business")
+            tc_row = self.test_data[self.test_data['TC_ID'] == "TC_14"]
+            test_data_value = tc_row['Test Data'].values[0]
+            invoice_ref = self._parse_invoice_reference(test_data_value)
+            # Extract client type from invoice reference
+            client_credential_type = invoice_ref.split('+')[-1].strip() if invoice_ref and '+' in invoice_ref else "Client_Business"
+            print(f"[TC_14] Client credential type derived from invoice reference: {client_credential_type}")
+            client_email, client_password = self._get_credentials(client_credential_type)
+
+            self.page.goto(f"{self.base_url}/login")
+            self.page.wait_for_load_state("networkidle")
+            self.page.wait_for_timeout(1000)
+
+            email_input = self.page.locator("input[type='email'], input[type='text']").first
+            email_input.fill(client_email)
+            print(f"  - Email: {client_email}")
+
+            password_input = self.page.locator("input[type='password']").first
+            password_input.fill(client_password)
+            print(f"  - Password: ********")
+
+            # Submit login
+            password_input.press("Enter")
+            self.page.wait_for_timeout(2000)
+
+            try:
+                self.page.wait_for_url("**/dashboard", timeout=30000)
+            except:
+                login_btn = self.page.locator("button:has-text('Log in')").first
+                if login_btn.is_visible(timeout=2000):
+                    login_btn.click()
+                    self.page.wait_for_url("**/dashboard", timeout=30000)
+
+            self.page.wait_for_load_state("networkidle")
+            print(f"[TC_14] Login successful - Client_Business logged in")
+
+            screenshot_before = self._take_screenshot("TC_14_01_Client_Dashboard_Before")
+            tc14_screenshots.append(screenshot_before)
+            print(f"[TC_14] Screenshot captured: Client Dashboard before invoice creation")
+
+            # TC_14 Step 3: Capture the current "Outstanding invoices" count
+            print(f"\n[TC_14] Step 3: Capturing current 'Outstanding invoices' count...")
+
+            # Try multiple selectors to find the count
+            initial_count = None
+            count_selectors = [
+                "h3:near(:text('Outstanding invoices'))",
+                "text='Outstanding invoices' >> xpath=following-sibling::h3",
+                "div:has-text('Outstanding invoices') h3",
+            ]
+
+            for selector in count_selectors:
+                try:
+                    count_element = self.page.locator(selector).first
+                    if count_element.is_visible(timeout=2000):
+                        count_text = count_element.inner_text().strip()
+                        initial_count = int(count_text)
+                        print(f"[TC_14] Current 'Outstanding invoices' count: {initial_count}")
+                        break
+                except Exception as e:
+                    continue
+
+            if initial_count is None:
+                # Fallback: try to extract from page content using JavaScript
+                initial_count = self.page.evaluate(r"""
+                    () => {
+                        const headings = document.querySelectorAll('h3');
+                        for (let h of headings) {
+                            const text = h.innerText.trim();
+                            // Find the h3 that contains only a number and is near "Outstanding invoices" text
+                            if (/^\d+$/.test(text)) {
+                                const parent = h.closest('div');
+                                if (parent && parent.innerText.includes('Outstanding invoices')) {
+                                    return parseInt(text);
+                                }
+                            }
+                        }
+                        return null;
+                    }
+                """)
+
+                if initial_count is not None:
+                    print(f"[TC_14] Found count using JavaScript: {initial_count}")
+                else:
+                    raise Exception("Could not locate 'Outstanding invoices' count on dashboard")
+
+            # TC_14 Step 4: Logout from Client_Business
+            print(f"\n[TC_14] Step 4: Logging out from Client_Business...")
+            self.page.goto(f"{self.base_url}/dashboard")
+            self.page.wait_for_load_state("networkidle")
+            logout_button = self.page.locator("button:has-text('Log out'), button:has-text('Logout')").first
+            if logout_button.is_visible(timeout=5000):
+                logout_button.click()
+                self.page.wait_for_timeout(2000)
+
+            # Handle any beforeunload dialog
+            try:
+                self.page.on("dialog", lambda dialog: dialog.accept())
+            except:
+                pass
+
+            # TC_14 Step 5: Login as Vendor_Individual
+            print(f"\n[TC_14] Step 5: Logging in as Vendor_Individual...")
+            vendor_email, vendor_password = self._get_credentials_for_tc("TC_14", specific_step_tc="TC_03")
+
+            # Navigate to login page if needed
+            if "/login" not in self.page.url:
+                self.page.goto(f"{self.base_url}/login")
+                self.page.wait_for_load_state("networkidle")
+
+            # Fill login form
+            email_input = self.page.locator("input[type='email'], input[type='text']").first
+            email_input.fill(vendor_email)
+            print(f"  - Email: {vendor_email}")
+
+            password_input = self.page.locator("input[type='password']").first
+            password_input.fill(vendor_password)
+            print(f"  - Password: ********")
+
+            # Submit login
+            password_input.press("Enter")
+            self.page.wait_for_timeout(2000)
+
+            # Wait for dashboard
+            self.page.wait_for_url("**/dashboard", timeout=30000)
+            self.page.wait_for_load_state("networkidle")
+            print(f"[TC_14] Login successful - Vendor_Individual logged in")
+
+            # Take screenshot of vendor dashboard
+            screenshot_vendor = self._take_screenshot("TC_14_02_Vendor_Dashboard")
+            tc14_screenshots.append(screenshot_vendor)
+
+            # TC_14 Step 6: Create Invoice (using TC_14 invoice data)
+            print(f"\n[TC_14] Step 6: Executing TC_03 with TC_14 invoice data...")
+            tc03_result = self.tc_03_raise_invoice(context_tc_id="TC_14")
+            if not tc03_result:
+                raise Exception("TC_03 failed - Cannot create invoice for TC_14")
+
+            # Save the invoice number for later verification
+            invoice_number = self.invoice_data.get('invoice_number', '') or self.invoice_data.get('Invoice Number', '')
+            if not invoice_number:
+                invoice_number = self.request_id or 'N/A'
+            print(f"[TC_14] Invoice created: {invoice_number}")
+
+            # TC_14 Step 7: Logout from Vendor_Individual
+            print(f"\n[TC_14] Step 7: Logging out from Vendor_Individual...")
+            self.page.goto(f"{self.base_url}/dashboard")
+            self.page.wait_for_load_state("networkidle")
+            logout_button = self.page.locator("button:has-text('Log out'), button:has-text('Logout')").first
+            if logout_button.is_visible(timeout=5000):
+                logout_button.click()
+                self.page.wait_for_timeout(2000)
+
+            # Handle any beforeunload dialog
+            try:
+                self.page.on("dialog", lambda dialog: dialog.accept())
+            except:
+                pass
+
+            # TC_14 Step 8: Login as Client_Business again
+            print(f"\n[TC_14] Step 8: Logging in as Client_Business again...")
+            self.page.goto(f"{self.base_url}/login")
+            self.page.wait_for_load_state("networkidle")
+            self.page.wait_for_timeout(1000)
+
+            email_input = self.page.locator("input[type='email'], input[type='text']").first
+            email_input.fill(client_email)
+            print(f"  - Email: {client_email}")
+
+            password_input = self.page.locator("input[type='password']").first
+            password_input.fill(client_password)
+            print(f"  - Password: ********")
+
+            # Submit login
+            password_input.press("Enter")
+            self.page.wait_for_timeout(2000)
+
+            try:
+                self.page.wait_for_url("**/dashboard", timeout=30000)
+            except:
+                login_btn = self.page.locator("button:has-text('Log in')").first
+                if login_btn.is_visible(timeout=2000):
+                    login_btn.click()
+                    self.page.wait_for_url("**/dashboard", timeout=30000)
+
+            self.page.wait_for_load_state("networkidle")
+            print(f"[TC_14] Login successful - Client_Business logged in again")
+
+            screenshot_after = self._take_screenshot("TC_14_03_Client_Dashboard_After")
+            tc14_screenshots.append(screenshot_after)
+            print(f"[TC_14] Screenshot captured: Client Dashboard after invoice creation")
+
+            # TC_14 Step 9: Capture the new "Outstanding invoices" count
+            print(f"\n[TC_14] Step 9: Capturing new 'Outstanding invoices' count...")
+
+            new_count = None
+            for selector in count_selectors:
+                try:
+                    count_element = self.page.locator(selector).first
+                    if count_element.is_visible(timeout=2000):
+                        count_text = count_element.inner_text().strip()
+                        new_count = int(count_text)
+                        print(f"[TC_14] New 'Outstanding invoices' count: {new_count}")
+                        break
+                except:
+                    continue
+
+            if new_count is None:
+                # Fallback: try to extract from page content using JavaScript
+                new_count = self.page.evaluate(r"""
+                    () => {
+                        const headings = document.querySelectorAll('h3');
+                        for (let h of headings) {
+                            const text = h.innerText.trim();
+                            if (/^\d+$/.test(text)) {
+                                const parent = h.closest('div');
+                                if (parent && parent.innerText.includes('Outstanding invoices')) {
+                                    return parseInt(text);
+                                }
+                            }
+                        }
+                        return null;
+                    }
+                """)
+
+                if new_count is not None:
+                    print(f"[TC_14] Found new count using JavaScript: {new_count}")
+                else:
+                    raise Exception("Could not locate 'Outstanding invoices' count after invoice creation")
+
+            # TC_14 Step 10: Verify count increased by 1
+            print(f"\n[TC_14] Step 10: Verifying count increase...")
+            print(f"[TC_14] Initial count: {initial_count}")
+            print(f"[TC_14] New count: {new_count}")
+            print(f"[TC_14] Difference: {new_count - initial_count}")
+
+            count_verification_passed = (new_count == initial_count + 1)
+
+            # TC_14 Step 11: Click on Outstanding Invoices to view the list
+            print(f"\n[TC_14] Step 11: Clicking on Outstanding Invoices to view the list...")
+
+            # Try to click on the Outstanding invoices section
+            outstanding_clicked = False
+            click_selectors = [
+                "text='Outstanding invoices'",
+                "h3:near(:text('Outstanding invoices'))",
+                "div:has-text('Outstanding invoices')",
+            ]
+
+            for selector in click_selectors:
+                try:
+                    outstanding_element = self.page.locator(selector).first
+                    if outstanding_element.is_visible(timeout=2000):
+                        outstanding_element.click()
+                        outstanding_clicked = True
+                        print(f"[TC_14] Clicked on Outstanding Invoices using selector: {selector}")
+                        self.page.wait_for_timeout(2000)
+                        break
+                except:
+                    continue
+
+            if not outstanding_clicked:
+                print(f"[TC_14] WARNING: Could not click on Outstanding Invoices section")
+
+            # Take screenshot of the outstanding invoices list
+            screenshot_list = self._take_screenshot("TC_14_04_Outstanding_Invoices_List")
+            tc14_screenshots.append(screenshot_list)
+
+            # TC_14 Step 12: Verify the newly created invoice is present in the list
+            print(f"\n[TC_14] Step 12: Verifying invoice {invoice_number} is present in the list...")
+
+            invoice_found = False
+            try:
+                # Look for the invoice in the list
+                invoice_element = self.page.locator(f"text={invoice_number}").first
+                if invoice_element.is_visible(timeout=5000):
+                    invoice_found = True
+                    print(f"[TC_14] Invoice {invoice_number} found in Outstanding Invoices list")
+            except:
+                print(f"[TC_14] Invoice {invoice_number} NOT found in Outstanding Invoices list")
+
+            # Take final screenshot
+            screenshot_final = self._take_screenshot("TC_14_05_Verification_Result")
+            tc14_screenshots.append(screenshot_final)
+
+            # TC_14 Final verification
+            # Combine all screenshots
+            all_screenshots = ", ".join(tc14_screenshots)
+
+            if count_verification_passed and invoice_found:
+                result_message = (
+                    f"PASSED: Outstanding invoices count increased from {initial_count} to {new_count} "
+                    f"(+1 as expected). Invoice {invoice_number} is present in the Outstanding Invoices list."
+                )
+                self._log_result(
+                    tc_id,
+                    scenario,
+                    "PASSED",
+                    result_message,
+                    all_screenshots
+                )
+                print(f"[TC_14] {result_message}")
+                return True
+            else:
+                error_messages = []
+                if not count_verification_passed:
+                    error_messages.append(
+                        f"Count verification failed: Expected {initial_count + 1}, but got {new_count}. "
+                        f"Difference: {new_count - initial_count} (expected: 1)"
+                    )
+                if not invoice_found:
+                    error_messages.append(
+                        f"Invoice {invoice_number} NOT found in Outstanding Invoices list"
+                    )
+                raise Exception(" | ".join(error_messages))
+
+        except Exception as e:
+            screenshot_failed = self._take_screenshot("TC_14_FAILED")
+            # Include all screenshots collected so far plus the failure screenshot
+            if 'tc14_screenshots' in dir() and tc14_screenshots:
+                tc14_screenshots.append(screenshot_failed)
+                all_screenshots = ", ".join(tc14_screenshots)
+            else:
+                all_screenshots = screenshot_failed
+            self._log_result(tc_id, scenario, "FAILED", str(e), all_screenshots)
+            print(f"[TC_14] FAILED: {str(e)}")
             return False
 
     # =========================================================================
@@ -6050,6 +6469,58 @@ class OmneyBusinessAutomation:
             self.generate_report(report_prefix="TC_12_Report")
             print("="*70)
 
+            # Clear test results for TC_13
+            self.test_results = []
+
+            # TC_13: Check Pending Invoice Raised count
+            print("\n" + "="*70)
+            print("EXECUTING TC_13: Check Pending Invoice Raised")
+            print("="*70)
+            try:
+                self._load_test_data()
+                tc13_result = self.tc_13_check_pending_invoice_raised()
+                if tc13_result:
+                    print("[SUCCESS] TC_13 completed successfully")
+                else:
+                    print("[FAILED] TC_13 execution failed")
+            except Exception as e:
+                print(f"[ERROR] TC_13 execution error: {e}")
+            print("="*70)
+
+            # Generate separate report for TC_13
+            print("\n" + "="*70)
+            print("GENERATING REPORT FOR TC_13")
+            print("="*70)
+            self.tc13_results = self.test_results.copy()
+            self.generate_report(report_prefix="TC_13_Report")
+            print("="*70)
+
+            # Clear test results for TC_14
+            self.test_results = []
+
+            # TC_14: Check Outstanding Invoices count
+            print("\n" + "="*70)
+            print("EXECUTING TC_14: Check Outstanding Invoices")
+            print("="*70)
+            try:
+                self._load_test_data()
+                tc14_result = self.tc_14_check_outstanding_invoices()
+                if tc14_result:
+                    print("[SUCCESS] TC_14 completed successfully")
+                else:
+                    print("[FAILED] TC_14 execution failed")
+            except Exception as e:
+                print(f"[ERROR] TC_14 execution error: {e}")
+            print("="*70)
+
+            # Generate separate report for TC_14
+            print("\n" + "="*70)
+            print("GENERATING REPORT FOR TC_14")
+            print("="*70)
+            self.tc14_results = self.test_results.copy()
+            self.generate_report(report_prefix="TC_14_Report")
+            print("="*70)
+
         except Exception as e:
             print(f"[CRITICAL ERROR] {e}")
             raise
@@ -6096,12 +6567,28 @@ class OmneyBusinessAutomation:
                 status_icon = "✓" if result["status"] == "PASSED" else "✗"
                 print(f"  {status_icon} {result['tc_id']}: {result['status']}")
 
+        # Show TC_13 results
+        if hasattr(self, 'tc13_results') and self.tc13_results:
+            print("\nTC_13 (Pending Invoice Raised Flow):")
+            for result in self.tc13_results:
+                status_icon = "✓" if result["status"] == "PASSED" else "✗"
+                print(f"  {status_icon} {result['tc_id']}: {result['status']}")
+
+        # Show TC_14 results
+        if hasattr(self, 'tc14_results') and self.tc14_results:
+            print("\nTC_14 (Outstanding Invoices Flow):")
+            for result in self.tc14_results:
+                status_icon = "✓" if result["status"] == "PASSED" else "✗"
+                print(f"  {status_icon} {result['tc_id']}: {result['status']}")
+
         # Calculate overall statistics
         all_results = (self.tc01_08_results if hasattr(self, 'tc01_08_results') else []) + \
                       (self.tc09_results if hasattr(self, 'tc09_results') else []) + \
                       (self.tc10_results if hasattr(self, 'tc10_results') else []) + \
                       (self.tc11_results if hasattr(self, 'tc11_results') else []) + \
-                      (self.tc12_results if hasattr(self, 'tc12_results') else [])
+                      (self.tc12_results if hasattr(self, 'tc12_results') else []) + \
+                      (self.tc13_results if hasattr(self, 'tc13_results') else []) + \
+                      (self.tc14_results if hasattr(self, 'tc14_results') else [])
         total_passed = sum(1 for r in all_results if r["status"] == "PASSED")
         total_failed = sum(1 for r in all_results if r["status"] == "FAILED")
 
@@ -6135,6 +6622,8 @@ def main():
                         help="Run only TC_12 (Reject invoice flow)")
     parser.add_argument("--tc13", action="store_true",
                         help="Run only TC_13 (Check Pending Invoice Raised count)")
+    parser.add_argument("--tc14", action="store_true",
+                        help="Run only TC_14 (Check Outstanding Invoices count)")
 
     args = parser.parse_args()
 
@@ -6269,6 +6758,25 @@ def main():
                 print("TC_13 COMPLETED SUCCESSFULLY!")
                 print("="*70)
             automation.generate_report(report_prefix="TC_13_Report")
+        finally:
+            automation.teardown()
+    elif args.tc14:
+        # Run only TC_14 (check outstanding invoices count)
+        print("\n" + "="*70)
+        print("RUNNING TC_14 ONLY")
+        print("Check Outstanding Invoices count increases after invoice creation")
+        print("="*70)
+        automation = OmneyBusinessAutomation(headless=headless if headless is not None else False,
+                                             keep_browser_open=False, env=args.env)
+        try:
+            automation.setup()
+            automation._load_test_data()
+            tc14_result = automation.tc_14_check_outstanding_invoices()
+            if tc14_result:
+                print("\n" + "="*70)
+                print("TC_14 COMPLETED SUCCESSFULLY!")
+                print("="*70)
+            automation.generate_report(report_prefix="TC_14_Report")
         finally:
             automation.teardown()
     else:
